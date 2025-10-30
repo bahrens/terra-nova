@@ -19,7 +19,7 @@ public class Camera
 
     // Camera settings
     public float Speed { get; set; } = 5.0f;      // Movement speed (units per second)
-    public float Sensitivity { get; set; } = 0.1f; // Mouse sensitivity
+    public float Sensitivity { get; set; } = 0.002f; // Mouse sensitivity
     public float Fov { get; set; } = MathHelper.DegreesToRadians(75.0f); // Field of view
 
     public Camera(Vector3 position)
