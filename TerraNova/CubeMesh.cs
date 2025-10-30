@@ -27,39 +27,56 @@ public class CubeMesh : IDisposable
         var color = BlockHelper.GetBlockColor(blockType);
         float r = color.r, g = color.g, b = color.b;
 
-        // Define the 8 corners of a unit cube centered at 'pos'
-        // Each vertex has: 3 floats for position + 3 floats for color = 6 floats total
+        // Each vertex has: 3 floats position + 2 floats UV + 3 floats color = 8 floats total
+        // We need 24 vertices (4 per face * 6 faces) because each face needs unique UV coords
         float[] vertices = {
-            // Position (x,y,z)              // Color (r,g,b)
-            // Front face (z = 0.5)
-            pos.X - 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  r, g, b,  // 0: Bottom-left
-            pos.X + 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  r, g, b,  // 1: Bottom-right
-            pos.X + 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  r, g, b,  // 2: Top-right
-            pos.X - 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  r, g, b,  // 3: Top-left
+            // Position (x,y,z)              // UV (u,v)  // Color (r,g,b)
 
-            // Back face (z = -0.5)
-            pos.X - 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  r, g, b,  // 4: Bottom-left
-            pos.X + 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  r, g, b,  // 5: Bottom-right
-            pos.X + 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  r, g, b,  // 6: Top-right
-            pos.X - 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  r, g, b,  // 7: Top-left
+            // Front face (+Z)
+            pos.X - 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  0.0f, 0.0f,  r, g, b,  // 0
+            pos.X + 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  1.0f, 0.0f,  r, g, b,  // 1
+            pos.X + 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  1.0f, 1.0f,  r, g, b,  // 2
+            pos.X - 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  0.0f, 1.0f,  r, g, b,  // 3
+
+            // Back face (-Z)
+            pos.X + 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  0.0f, 0.0f,  r, g, b,  // 4
+            pos.X - 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  1.0f, 0.0f,  r, g, b,  // 5
+            pos.X - 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  1.0f, 1.0f,  r, g, b,  // 6
+            pos.X + 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  0.0f, 1.0f,  r, g, b,  // 7
+
+            // Right face (+X)
+            pos.X + 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  0.0f, 0.0f,  r, g, b,  // 8
+            pos.X + 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  1.0f, 0.0f,  r, g, b,  // 9
+            pos.X + 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  1.0f, 1.0f,  r, g, b,  // 10
+            pos.X + 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  0.0f, 1.0f,  r, g, b,  // 11
+
+            // Left face (-X)
+            pos.X - 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  0.0f, 0.0f,  r, g, b,  // 12
+            pos.X - 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  1.0f, 0.0f,  r, g, b,  // 13
+            pos.X - 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  1.0f, 1.0f,  r, g, b,  // 14
+            pos.X - 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  0.0f, 1.0f,  r, g, b,  // 15
+
+            // Top face (+Y)
+            pos.X - 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  0.0f, 0.0f,  r, g, b,  // 16
+            pos.X + 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  1.0f, 0.0f,  r, g, b,  // 17
+            pos.X + 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  1.0f, 1.0f,  r, g, b,  // 18
+            pos.X - 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  0.0f, 1.0f,  r, g, b,  // 19
+
+            // Bottom face (-Y)
+            pos.X - 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  0.0f, 0.0f,  r, g, b,  // 20
+            pos.X + 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  1.0f, 0.0f,  r, g, b,  // 21
+            pos.X + 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  1.0f, 1.0f,  r, g, b,  // 22
+            pos.X - 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  0.0f, 1.0f,  r, g, b,  // 23
         };
 
-        // Define triangles using vertex indices
-        // Each face = 2 triangles = 6 indices
-        // Vertices are ordered counter-clockwise when viewed from outside
+        // Define triangles using vertex indices (6 faces * 2 triangles * 3 vertices)
         uint[] indices = {
-            // Front face
-            0, 1, 2,  2, 3, 0,
-            // Right face
-            1, 5, 6,  6, 2, 1,
-            // Back face
-            5, 4, 7,  7, 6, 5,
-            // Left face
-            4, 0, 3,  3, 7, 4,
-            // Top face
-            3, 2, 6,  6, 7, 3,
-            // Bottom face
-            4, 5, 1,  1, 0, 4
+            0, 1, 2,   2, 3, 0,      // Front
+            4, 5, 6,   6, 7, 4,      // Back
+            8, 9, 10,  10, 11, 8,    // Right
+            12, 13, 14, 14, 15, 12,  // Left
+            16, 17, 18, 18, 19, 16,  // Top
+            20, 21, 22, 22, 23, 20   // Bottom
         };
 
         _indexCount = indices.Length;
@@ -80,16 +97,20 @@ public class CubeMesh : IDisposable
         GL.BufferData(BufferTarget.ElementArrayBuffer, indices.Length * sizeof(uint),
                       indices, BufferUsageHint.StaticDraw);
 
-        // Configure vertex attributes
-        // Position attribute (location = 0, 3 floats, stride = 6 floats, offset = 0)
-        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false,
-                               6 * sizeof(float), 0);
+        // Configure vertex attributes (stride is now 8 floats per vertex)
+        int stride = 8 * sizeof(float);
+
+        // Position attribute (location = 0, 3 floats, offset = 0)
+        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, stride, 0);
         GL.EnableVertexAttribArray(0);
 
-        // Color attribute (location = 1, 3 floats, stride = 6 floats, offset = 3 floats)
-        GL.VertexAttribPointer(1, 3, VertexAttribPointerType.Float, false,
-                               6 * sizeof(float), 3 * sizeof(float));
+        // UV attribute (location = 1, 2 floats, offset = 3 floats)
+        GL.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, stride, 3 * sizeof(float));
         GL.EnableVertexAttribArray(1);
+
+        // Color attribute (location = 2, 3 floats, offset = 5 floats)
+        GL.VertexAttribPointer(2, 3, VertexAttribPointerType.Float, false, stride, 5 * sizeof(float));
+        GL.EnableVertexAttribArray(2);
 
         // Unbind (not strictly necessary, but good practice)
         GL.BindVertexArray(0);

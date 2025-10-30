@@ -17,6 +17,7 @@ public class Game : GameWindow
 
     private Shader _shader = null!;
     private CubeMesh _testCube = null!;
+    private Texture _grassTexture = null!;
 
     public Game(int width, int height, string title)
         : base(GameWindowSettings.Default,
@@ -57,6 +58,10 @@ public class Game : GameWindow
         string vertexShaderSource = File.ReadAllText("Shaders/basic.vert");
         string fragmentShaderSource = File.ReadAllText("Shaders/basic.frag");
         _shader = new Shader(vertexShaderSource, fragmentShaderSource);
+
+        // Generate procedural texture for grass block
+        byte[] grassPixels = TextureGenerator.GenerateTexture(BlockType.Grass, 16);
+        _grassTexture = new Texture(16, 16, grassPixels);
 
         // Create a test cube at the origin
         _testCube = new CubeMesh(Vector3.Zero, BlockType.Grass);
@@ -110,6 +115,10 @@ public class Game : GameWindow
 
         // Activate our shader
         _shader.Use();
+
+        // Bind the texture
+        _grassTexture.Bind(0);
+        _shader.SetInt("blockTexture", 0);
 
         // Set transformation matrices
         Matrix4 model = Matrix4.Identity; // Model matrix (no transformation for now)
@@ -173,6 +182,7 @@ public class Game : GameWindow
         // Clean up resources
         _shader?.Dispose();
         _testCube?.Dispose();
+        _grassTexture?.Dispose();
 
         Console.WriteLine("Terra Nova shutting down...");
     }
