@@ -1,4 +1,4 @@
-namespace TerraNova;
+namespace TerraNova.Shared;
 
 /// <summary>
 /// Represents different types of blocks in the world

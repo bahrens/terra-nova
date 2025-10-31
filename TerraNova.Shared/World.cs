@@ -1,6 +1,4 @@
-using OpenTK.Mathematics;
-
-namespace TerraNova;
+namespace TerraNova.Shared;
 
 /// <summary>
 /// Manages the voxel world and block placement
