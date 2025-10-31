@@ -14,72 +14,119 @@ public class CubeMesh : IDisposable
     private int _indexCount;
     private bool _disposed = false;
 
-    public CubeMesh(Vector3 position, BlockType blockType)
+    public CubeMesh(Vector3 position, BlockType blockType, BlockFaces visibleFaces = BlockFaces.All)
     {
-        GenerateCube(position, blockType);
+        GenerateCube(position, blockType, visibleFaces);
     }
 
     /// <summary>
-    /// Generates vertex data for a cube at the given position
+    /// Generates vertex data for a cube at the given position, only including visible faces
     /// </summary>
-    private void GenerateCube(Vector3 pos, BlockType blockType)
+    private void GenerateCube(Vector3 pos, BlockType blockType, BlockFaces visibleFaces)
     {
         var color = BlockHelper.GetBlockColor(blockType);
         float r = color.r, g = color.g, b = color.b;
 
-        // Each vertex has: 3 floats position + 2 floats UV + 3 floats color = 8 floats total
-        // We need 24 vertices (4 per face * 6 faces) because each face needs unique UV coords
-        float[] vertices = {
-            // Position (x,y,z)              // UV (u,v)  // Color (r,g,b)
+        // Dynamically build vertex and index lists based on visible faces
+        var vertexList = new List<float>();
+        var indexList = new List<uint>();
+        uint vertexCount = 0;
 
-            // Front face (+Z)
-            pos.X - 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  0.0f, 0.0f,  r, g, b,  // 0
-            pos.X + 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  1.0f, 0.0f,  r, g, b,  // 1
-            pos.X + 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  1.0f, 1.0f,  r, g, b,  // 2
-            pos.X - 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  0.0f, 1.0f,  r, g, b,  // 3
+        // Helper to add a face's vertices and indices
+        void AddFace(float[] faceVertices)
+        {
+            // Add vertices (each face has 4 vertices * 8 floats = 32 floats)
+            foreach (float v in faceVertices)
+            {
+                vertexList.Add(v);
+            }
 
-            // Back face (-Z)
-            pos.X + 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  0.0f, 0.0f,  r, g, b,  // 4
-            pos.X - 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  1.0f, 0.0f,  r, g, b,  // 5
-            pos.X - 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  1.0f, 1.0f,  r, g, b,  // 6
-            pos.X + 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  0.0f, 1.0f,  r, g, b,  // 7
+            // Add indices (2 triangles per face)
+            indexList.AddRange(new uint[] {
+                vertexCount + 0, vertexCount + 1, vertexCount + 2,
+                vertexCount + 2, vertexCount + 3, vertexCount + 0
+            });
 
-            // Right face (+X)
-            pos.X + 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  0.0f, 0.0f,  r, g, b,  // 8
-            pos.X + 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  1.0f, 0.0f,  r, g, b,  // 9
-            pos.X + 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  1.0f, 1.0f,  r, g, b,  // 10
-            pos.X + 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  0.0f, 1.0f,  r, g, b,  // 11
+            vertexCount += 4;
+        }
 
-            // Left face (-X)
-            pos.X - 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  0.0f, 0.0f,  r, g, b,  // 12
-            pos.X - 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  1.0f, 0.0f,  r, g, b,  // 13
-            pos.X - 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  1.0f, 1.0f,  r, g, b,  // 14
-            pos.X - 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  0.0f, 1.0f,  r, g, b,  // 15
+        // Front face (+Z)
+        if ((visibleFaces & BlockFaces.Front) != 0)
+        {
+            AddFace(new float[] {
+                pos.X - 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  0.0f, 0.0f,  r, g, b,
+                pos.X + 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  1.0f, 0.0f,  r, g, b,
+                pos.X + 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  1.0f, 1.0f,  r, g, b,
+                pos.X - 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  0.0f, 1.0f,  r, g, b,
+            });
+        }
 
-            // Top face (+Y)
-            pos.X - 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  0.0f, 0.0f,  r, g, b,  // 16
-            pos.X + 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  1.0f, 0.0f,  r, g, b,  // 17
-            pos.X + 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  1.0f, 1.0f,  r, g, b,  // 18
-            pos.X - 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  0.0f, 1.0f,  r, g, b,  // 19
+        // Back face (-Z)
+        if ((visibleFaces & BlockFaces.Back) != 0)
+        {
+            AddFace(new float[] {
+                pos.X + 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  0.0f, 0.0f,  r, g, b,
+                pos.X - 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  1.0f, 0.0f,  r, g, b,
+                pos.X - 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  1.0f, 1.0f,  r, g, b,
+                pos.X + 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  0.0f, 1.0f,  r, g, b,
+            });
+        }
 
-            // Bottom face (-Y)
-            pos.X - 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  0.0f, 0.0f,  r, g, b,  // 20
-            pos.X + 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  1.0f, 0.0f,  r, g, b,  // 21
-            pos.X + 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  1.0f, 1.0f,  r, g, b,  // 22
-            pos.X - 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  0.0f, 1.0f,  r, g, b,  // 23
-        };
+        // Right face (+X)
+        if ((visibleFaces & BlockFaces.Right) != 0)
+        {
+            AddFace(new float[] {
+                pos.X + 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  0.0f, 0.0f,  r, g, b,
+                pos.X + 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  1.0f, 0.0f,  r, g, b,
+                pos.X + 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  1.0f, 1.0f,  r, g, b,
+                pos.X + 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  0.0f, 1.0f,  r, g, b,
+            });
+        }
 
-        // Define triangles using vertex indices (6 faces * 2 triangles * 3 vertices)
-        uint[] indices = {
-            0, 1, 2,   2, 3, 0,      // Front
-            4, 5, 6,   6, 7, 4,      // Back
-            8, 9, 10,  10, 11, 8,    // Right
-            12, 13, 14, 14, 15, 12,  // Left
-            16, 17, 18, 18, 19, 16,  // Top
-            20, 21, 22, 22, 23, 20   // Bottom
-        };
+        // Left face (-X)
+        if ((visibleFaces & BlockFaces.Left) != 0)
+        {
+            AddFace(new float[] {
+                pos.X - 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  0.0f, 0.0f,  r, g, b,
+                pos.X - 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  1.0f, 0.0f,  r, g, b,
+                pos.X - 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  1.0f, 1.0f,  r, g, b,
+                pos.X - 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  0.0f, 1.0f,  r, g, b,
+            });
+        }
+
+        // Top face (+Y)
+        if ((visibleFaces & BlockFaces.Top) != 0)
+        {
+            AddFace(new float[] {
+                pos.X - 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  0.0f, 0.0f,  r, g, b,
+                pos.X + 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  1.0f, 0.0f,  r, g, b,
+                pos.X + 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  1.0f, 1.0f,  r, g, b,
+                pos.X - 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  0.0f, 1.0f,  r, g, b,
+            });
+        }
+
+        // Bottom face (-Y)
+        if ((visibleFaces & BlockFaces.Bottom) != 0)
+        {
+            AddFace(new float[] {
+                pos.X - 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  0.0f, 0.0f,  r, g, b,
+                pos.X + 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  1.0f, 0.0f,  r, g, b,
+                pos.X + 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  1.0f, 1.0f,  r, g, b,
+                pos.X - 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  0.0f, 1.0f,  r, g, b,
+            });
+        }
+
+        // Convert lists to arrays
+        float[] vertices = vertexList.ToArray();
+        uint[] indices = indexList.ToArray();
 
         _indexCount = indices.Length;
+
+        // Early exit if no faces to render
+        if (_indexCount == 0)
+        {
+            return;
+        }
 
         // Create and bind VAO (stores the vertex attribute configuration)
         _vao = GL.GenVertexArray();
@@ -121,6 +168,8 @@ public class CubeMesh : IDisposable
     /// </summary>
     public void Draw()
     {
+        if (_indexCount == 0) return; // Nothing to draw
+
         GL.BindVertexArray(_vao);
         GL.DrawElements(PrimitiveType.Triangles, _indexCount, DrawElementsType.UnsignedInt, 0);
         GL.BindVertexArray(0);

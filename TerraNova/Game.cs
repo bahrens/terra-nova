@@ -16,7 +16,8 @@ public class Game : GameWindow
     private Vector2 _lastMousePos;
 
     private Shader _shader = null!;
-    private CubeMesh _testCube = null!;
+    private World _world = null!;
+    private List<CubeMesh> _blockMeshes = null!;
     private Texture _grassTexture = null!;
 
     public Game(int width, int height, string title)
@@ -63,8 +64,32 @@ public class Game : GameWindow
         byte[] grassPixels = TextureGenerator.GenerateTexture(BlockType.Grass, 16);
         _grassTexture = new Texture(16, 16, grassPixels);
 
-        // Create a test cube at the origin
-        _testCube = new CubeMesh(Vector3.Zero, BlockType.Grass);
+        // Create world and add blocks
+        _world = new World();
+
+        // Build a small 5x5x5 cube of blocks to demonstrate face culling
+        for (int x = -2; x <= 2; x++)
+        {
+            for (int y = 0; y < 5; y++)
+            {
+                for (int z = -2; z <= 2; z++)
+                {
+                    _world.SetBlock(x, y, z, BlockType.Grass);
+                }
+            }
+        }
+
+        // Generate meshes for all blocks with face culling
+        _blockMeshes = new List<CubeMesh>();
+        foreach (var (pos, blockType) in _world.GetAllBlocks())
+        {
+            BlockFaces visibleFaces = _world.GetVisibleFaces(pos.X, pos.Y, pos.Z);
+            var mesh = new CubeMesh(new Vector3(pos.X, pos.Y, pos.Z), blockType, visibleFaces);
+            _blockMeshes.Add(mesh);
+        }
+
+        int totalBlocks = _blockMeshes.Count;
+        Console.WriteLine($"Generated {totalBlocks} blocks with face culling");
 
         Console.WriteLine("OpenGL Version: " + GL.GetString(StringName.Version));
         Console.WriteLine("Terra Nova initialized!");
@@ -120,18 +145,20 @@ public class Game : GameWindow
         _grassTexture.Bind(0);
         _shader.SetInt("blockTexture", 0);
 
-        // Set transformation matrices
-        Matrix4 model = Matrix4.Identity; // Model matrix (no transformation for now)
+        // Set view and projection matrices (same for all blocks)
         Matrix4 view = _camera.GetViewMatrix();
         Matrix4 projection = _camera.GetProjectionMatrix((float)ClientSize.X / ClientSize.Y);
-
-        // Send matrices to shader
-        _shader.SetMatrix4("model", model);
         _shader.SetMatrix4("view", view);
         _shader.SetMatrix4("projection", projection);
 
-        // Draw the test cube
-        _testCube.Draw();
+        // Draw all blocks
+        Matrix4 model = Matrix4.Identity; // Blocks are already positioned, so model is identity
+        _shader.SetMatrix4("model", model);
+
+        foreach (var mesh in _blockMeshes)
+        {
+            mesh.Draw();
+        }
 
         // Swap the front and back buffers (double buffering)
         SwapBuffers();
@@ -181,8 +208,15 @@ public class Game : GameWindow
 
         // Clean up resources
         _shader?.Dispose();
-        _testCube?.Dispose();
         _grassTexture?.Dispose();
+
+        if (_blockMeshes != null)
+        {
+            foreach (var mesh in _blockMeshes)
+            {
+                mesh.Dispose();
+            }
+        }
 
         Console.WriteLine("Terra Nova shutting down...");
     }
