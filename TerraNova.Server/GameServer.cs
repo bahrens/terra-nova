@@ -1,5 +1,6 @@
 using LiteNetLib;
 using LiteNetLib.Utils;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TerraNova.Server.Configuration;
 using TerraNova.Shared;
@@ -15,11 +16,13 @@ public class GameServer : IGameServer, INetEventListener
     private readonly World _world;
     private readonly ServerSettings _serverSettings;
     private readonly WorldSettings _worldSettings;
+    private readonly ILogger<GameServer> _logger;
 
-    public GameServer(IOptions<ServerSettings> serverSettings, IOptions<WorldSettings> worldSettings)
+    public GameServer(IOptions<ServerSettings> serverSettings, IOptions<WorldSettings> worldSettings, ILogger<GameServer> logger)
     {
         _serverSettings = serverSettings.Value;
         _worldSettings = worldSettings.Value;
+        _logger = logger;
         _netManager = new NetManager(this);
         _world = new World();
 
@@ -29,7 +32,7 @@ public class GameServer : IGameServer, INetEventListener
 
     private void InitializeWorld()
     {
-        Console.WriteLine("Generating world...");
+        _logger.LogInformation("Generating world...");
 
         // Calculate world bounds from center
         int halfX = _worldSettings.WorldSizeX / 2;
@@ -47,16 +50,17 @@ public class GameServer : IGameServer, INetEventListener
         }
 
         int totalBlocks = _worldSettings.WorldSizeX * _worldSettings.WorldSizeY * _worldSettings.WorldSizeZ;
-        Console.WriteLine($"World generated: {totalBlocks} blocks ({_worldSettings.WorldSizeX}x{_worldSettings.WorldSizeY}x{_worldSettings.WorldSizeZ})");
+        _logger.LogInformation("World generated: {TotalBlocks} blocks ({SizeX}x{SizeY}x{SizeZ})",
+            totalBlocks, _worldSettings.WorldSizeX, _worldSettings.WorldSizeY, _worldSettings.WorldSizeZ);
     }
 
     public void Start()
     {
         _netManager.Start(_serverSettings.Port);
-        Console.WriteLine($"Server started on port {_serverSettings.Port}");
-        Console.WriteLine($"Max clients: {_serverSettings.MaxClients}");
-        Console.WriteLine($"Tick rate: {_serverSettings.TickRate} Hz");
-        Console.WriteLine("Waiting for clients...");
+        _logger.LogInformation("Server started on port {Port}", _serverSettings.Port);
+        _logger.LogInformation("Max clients: {MaxClients}", _serverSettings.MaxClients);
+        _logger.LogInformation("Tick rate: {TickRate} Hz", _serverSettings.TickRate);
+        _logger.LogInformation("Waiting for clients...");
     }
 
     public void Update()
@@ -68,19 +72,19 @@ public class GameServer : IGameServer, INetEventListener
     public void Stop()
     {
         _netManager.Stop();
-        Console.WriteLine("Server stopped");
+        _logger.LogInformation("Server stopped");
     }
 
     // INetEventListener implementation
     public void OnPeerConnected(NetPeer peer)
     {
-        Console.WriteLine($"Client connected: {peer.Address}");
+        _logger.LogInformation("Client connected: {Address}", peer.Address);
         SendWorldData(peer);
     }
 
     public void OnPeerDisconnected(NetPeer peer, DisconnectInfo disconnectInfo)
     {
-        Console.WriteLine($"Client disconnected: {peer.Address} (Reason: {disconnectInfo.Reason})");
+        _logger.LogInformation("Client disconnected: {Address} (Reason: {Reason})", peer.Address, disconnectInfo.Reason);
     }
 
     public void OnNetworkReceive(NetPeer peer, NetPacketReader reader, byte channelNumber, DeliveryMethod deliveryMethod)
@@ -91,14 +95,15 @@ public class GameServer : IGameServer, INetEventListener
         {
             case MessageType.ClientConnect:
                 var connectMsg = reader.GetClientConnectMessage();
-                Console.WriteLine($"Player joined: {connectMsg.PlayerName}");
+                _logger.LogInformation("Player joined: {PlayerName}", connectMsg.PlayerName);
                 break;
 
             case MessageType.BlockUpdate:
                 var blockUpdate = reader.GetBlockUpdateMessage();
                 _world.SetBlock(blockUpdate.X, blockUpdate.Y, blockUpdate.Z, blockUpdate.NewType);
                 // Broadcast to all clients (TODO)
-                Console.WriteLine($"Block updated at ({blockUpdate.X},{blockUpdate.Y},{blockUpdate.Z}) to {blockUpdate.NewType}");
+                _logger.LogInformation("Block updated at ({X},{Y},{Z}) to {BlockType}",
+                    blockUpdate.X, blockUpdate.Y, blockUpdate.Z, blockUpdate.NewType);
                 break;
         }
 
@@ -107,7 +112,7 @@ public class GameServer : IGameServer, INetEventListener
 
     public void OnNetworkError(System.Net.IPEndPoint endPoint, System.Net.Sockets.SocketError socketError)
     {
-        Console.WriteLine($"Network error: {socketError}");
+        _logger.LogError("Network error: {SocketError}", socketError);
     }
 
     public void OnNetworkReceiveUnconnected(System.Net.IPEndPoint remoteEndPoint, NetPacketReader reader, UnconnectedMessageType messageType)
@@ -141,6 +146,6 @@ public class GameServer : IGameServer, INetEventListener
 
         peer.Send(writer, DeliveryMethod.ReliableOrdered);
 
-        Console.WriteLine($"Sent {blocks.Length} blocks to client {peer.Address}");
+        _logger.LogInformation("Sent {BlockCount} blocks to client {Address}", blocks.Length, peer.Address);
     }
 }

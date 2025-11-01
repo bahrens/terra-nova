@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TerraNova.Server.Configuration;
 
@@ -11,20 +12,22 @@ public class ServerWorker : BackgroundService
 {
     private readonly IGameServer _gameServer;
     private readonly ServerSettings _serverSettings;
+    private readonly ILogger<ServerWorker> _logger;
 
-    public ServerWorker(IGameServer gameServer, IOptions<ServerSettings> serverSettings)
+    public ServerWorker(IGameServer gameServer, IOptions<ServerSettings> serverSettings, ILogger<ServerWorker> logger)
     {
         _gameServer = gameServer;
         _serverSettings = serverSettings.Value;
+        _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        Console.WriteLine("Starting server...");
+        _logger.LogInformation("Starting server...");
         _gameServer.Start();
 
-        Console.WriteLine("Press Ctrl+C to stop the server");
-        Console.WriteLine();
+        _logger.LogInformation("Press Ctrl+C to stop the server");
+        _logger.LogInformation("");
 
         // Calculate update interval based on tick rate
         int updateIntervalMs = 1000 / _serverSettings.TickRate;
@@ -35,7 +38,7 @@ public class ServerWorker : BackgroundService
             await Task.Delay(updateIntervalMs, stoppingToken);
         }
 
-        Console.WriteLine("\nShutting down...");
+        _logger.LogInformation("Shutting down...");
         _gameServer.Stop();
     }
 }

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
@@ -22,6 +23,7 @@ public class Game : GameWindow
     private readonly INetworkClient _networkClient;
     private readonly NetworkSettings _networkSettings;
     private readonly CameraSettings _cameraSettings;
+    private readonly ILogger<Game> _logger;
     private List<CubeMesh> _blockMeshes = new();
     private Texture _grassTexture = null!;
     private bool _meshesGenerated = false;
@@ -30,7 +32,8 @@ public class Game : GameWindow
         IOptions<GameSettings> gameSettings,
         IOptions<NetworkSettings> networkSettings,
         IOptions<CameraSettings> cameraSettings,
-        INetworkClient networkClient)
+        INetworkClient networkClient,
+        ILogger<Game> logger)
         : base(GameWindowSettings.Default,
                new NativeWindowSettings()
                {
@@ -42,6 +45,7 @@ public class Game : GameWindow
         _networkClient = networkClient;
         _networkSettings = networkSettings.Value;
         _cameraSettings = cameraSettings.Value;
+        _logger = logger;
     }
 
     /// <summary>
@@ -84,11 +88,11 @@ public class Game : GameWindow
 
         // Connect to server using configured settings
         _networkClient.Connect(_networkSettings.ServerHost, _networkSettings.ServerPort, _networkSettings.PlayerName);
-        Console.WriteLine($"Connecting to {_networkSettings.ServerHost}:{_networkSettings.ServerPort}...");
+        _logger.LogInformation("Connecting to {Host}:{Port}...", _networkSettings.ServerHost, _networkSettings.ServerPort);
 
-        Console.WriteLine("OpenGL Version: " + GL.GetString(StringName.Version));
-        Console.WriteLine("Terra Nova initialized!");
-        Console.WriteLine("Controls: WASD to move, Space/Shift for up/down, Mouse to look, ESC to exit");
+        _logger.LogInformation("OpenGL Version: {Version}", GL.GetString(StringName.Version));
+        _logger.LogInformation("Terra Nova initialized!");
+        _logger.LogInformation("Controls: WASD to move, Space/Shift for up/down, Mouse to look, ESC to exit");
     }
 
     /// <summary>
@@ -134,7 +138,7 @@ public class Game : GameWindow
 
     private void GenerateMeshesFromWorld(World world)
     {
-        Console.WriteLine("Generating meshes from server world data...");
+        _logger.LogInformation("Generating meshes from server world data...");
 
         // Clear any existing meshes
         foreach (var mesh in _blockMeshes)
@@ -151,7 +155,7 @@ public class Game : GameWindow
             _blockMeshes.Add(mesh);
         }
 
-        Console.WriteLine($"Generated {_blockMeshes.Count} block meshes with face culling");
+        _logger.LogInformation("Generated {Count} block meshes with face culling", _blockMeshes.Count);
     }
 
     /// <summary>
@@ -246,6 +250,6 @@ public class Game : GameWindow
             }
         }
 
-        Console.WriteLine("Terra Nova shutting down...");
+        _logger.LogInformation("Terra Nova shutting down...");
     }
 }

@@ -1,5 +1,6 @@
 using LiteNetLib;
 using LiteNetLib.Utils;
+using Microsoft.Extensions.Logging;
 using TerraNova.Shared;
 
 namespace TerraNova;
@@ -10,6 +11,7 @@ namespace TerraNova;
 public class NetworkClient : INetworkClient, INetEventListener
 {
     private readonly NetManager _netManager;
+    private readonly ILogger<NetworkClient> _logger;
     private NetPeer? _serverPeer;
     private World? _world;
     private bool _worldReceived = false;
@@ -18,8 +20,9 @@ public class NetworkClient : INetworkClient, INetEventListener
     public bool WorldReceived => _worldReceived;
     public World? World => _world;
 
-    public NetworkClient()
+    public NetworkClient(ILogger<NetworkClient> logger)
     {
+        _logger = logger;
         _netManager = new NetManager(this);
     }
 
@@ -28,7 +31,7 @@ public class NetworkClient : INetworkClient, INetEventListener
         _netManager.Start();
         _serverPeer = _netManager.Connect(host, port, "TerraNova");
 
-        Console.WriteLine($"Connecting to {host}:{port}...");
+        _logger.LogInformation("Connecting to {Host}:{Port}...", host, port);
     }
 
     public void Update()
@@ -39,13 +42,13 @@ public class NetworkClient : INetworkClient, INetEventListener
     public void Disconnect()
     {
         _netManager.Stop();
-        Console.WriteLine("Disconnected from server");
+        _logger.LogInformation("Disconnected from server");
     }
 
     // INetEventListener implementation
     public void OnPeerConnected(NetPeer peer)
     {
-        Console.WriteLine("Connected to server!");
+        _logger.LogInformation("Connected to server!");
 
         // Send connection message
         var writer = new NetDataWriter();
@@ -57,7 +60,7 @@ public class NetworkClient : INetworkClient, INetEventListener
 
     public void OnPeerDisconnected(NetPeer peer, DisconnectInfo disconnectInfo)
     {
-        Console.WriteLine($"Disconnected from server: {disconnectInfo.Reason}");
+        _logger.LogInformation("Disconnected from server: {Reason}", disconnectInfo.Reason);
         _serverPeer = null;
     }
 
@@ -75,7 +78,7 @@ public class NetworkClient : INetworkClient, INetEventListener
             case MessageType.BlockUpdate:
                 var blockUpdate = reader.GetBlockUpdateMessage();
                 _world?.SetBlock(blockUpdate.X, blockUpdate.Y, blockUpdate.Z, blockUpdate.NewType);
-                Console.WriteLine($"Block updated at ({blockUpdate.X},{blockUpdate.Y},{blockUpdate.Z})");
+                _logger.LogInformation("Block updated at ({X},{Y},{Z})", blockUpdate.X, blockUpdate.Y, blockUpdate.Z);
                 break;
         }
 
@@ -84,7 +87,7 @@ public class NetworkClient : INetworkClient, INetEventListener
 
     public void OnNetworkError(System.Net.IPEndPoint endPoint, System.Net.Sockets.SocketError socketError)
     {
-        Console.WriteLine($"Network error: {socketError}");
+        _logger.LogError("Network error: {SocketError}", socketError);
     }
 
     public void OnNetworkReceiveUnconnected(System.Net.IPEndPoint remoteEndPoint, NetPacketReader reader, UnconnectedMessageType messageType)
@@ -105,7 +108,7 @@ public class NetworkClient : INetworkClient, INetEventListener
 
     private void ReceiveWorldData(WorldDataMessage worldData)
     {
-        Console.WriteLine($"Received world data: {worldData.Blocks.Length} blocks");
+        _logger.LogInformation("Received world data: {BlockCount} blocks", worldData.Blocks.Length);
 
         // Create world and populate it
         _world = new World();
@@ -116,6 +119,6 @@ public class NetworkClient : INetworkClient, INetEventListener
         }
 
         _worldReceived = true;
-        Console.WriteLine("World loaded from server!");
+        _logger.LogInformation("World loaded from server!");
     }
 }
