@@ -19,6 +19,7 @@ public class NetworkClient : INetworkClient, INetEventListener
     public bool IsConnected => _serverPeer != null && _serverPeer.ConnectionState == ConnectionState.Connected;
     public bool WorldReceived => _worldReceived;
     public World? World => _world;
+    public bool WorldChanged { get; set; }
 
     public NetworkClient(ILogger<NetworkClient> logger)
     {
@@ -43,6 +44,23 @@ public class NetworkClient : INetworkClient, INetEventListener
     {
         _netManager.Stop();
         _logger.LogInformation("Disconnected from server");
+    }
+
+    public void SendBlockUpdate(int x, int y, int z, BlockType blockType)
+    {
+        if (_serverPeer == null || !IsConnected)
+        {
+            _logger.LogWarning("Cannot send block update: not connected to server");
+            return;
+        }
+
+        var blockUpdate = new BlockUpdateMessage(x, y, z, blockType);
+        var writer = new NetDataWriter();
+        writer.Put((byte)MessageType.BlockUpdate);
+        writer.Put(blockUpdate);
+
+        _serverPeer.Send(writer, DeliveryMethod.ReliableOrdered);
+        _logger.LogDebug("Sent block update: ({X},{Y},{Z}) -> {BlockType}", x, y, z, blockType);
     }
 
     // INetEventListener implementation
@@ -78,6 +96,7 @@ public class NetworkClient : INetworkClient, INetEventListener
             case MessageType.BlockUpdate:
                 var blockUpdate = reader.GetBlockUpdateMessage();
                 _world?.SetBlock(blockUpdate.X, blockUpdate.Y, blockUpdate.Z, blockUpdate.NewType);
+                WorldChanged = true; // Flag that meshes need to be regenerated
                 _logger.LogInformation("Block updated at ({X},{Y},{Z})", blockUpdate.X, blockUpdate.Y, blockUpdate.Z);
                 break;
         }

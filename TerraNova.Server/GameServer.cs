@@ -101,7 +101,10 @@ public class GameServer : IGameServer, INetEventListener
             case MessageType.BlockUpdate:
                 var blockUpdate = reader.GetBlockUpdateMessage();
                 _world.SetBlock(blockUpdate.X, blockUpdate.Y, blockUpdate.Z, blockUpdate.NewType);
-                // Broadcast to all clients (TODO)
+
+                // Broadcast to all clients
+                BroadcastBlockUpdate(blockUpdate);
+
                 _logger.LogInformation("Block updated at ({X},{Y},{Z}) to {BlockType}",
                     blockUpdate.X, blockUpdate.Y, blockUpdate.Z, blockUpdate.NewType);
                 break;
@@ -147,5 +150,15 @@ public class GameServer : IGameServer, INetEventListener
         peer.Send(writer, DeliveryMethod.ReliableOrdered);
 
         _logger.LogInformation("Sent {BlockCount} blocks to client {Address}", blocks.Length, peer.Address);
+    }
+
+    private void BroadcastBlockUpdate(BlockUpdateMessage blockUpdate)
+    {
+        var writer = new NetDataWriter();
+        writer.Put((byte)MessageType.BlockUpdate);
+        writer.Put(blockUpdate);
+
+        // Send to all connected peers
+        _netManager.SendToAll(writer, DeliveryMethod.ReliableOrdered);
     }
 }

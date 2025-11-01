@@ -23,6 +23,11 @@ public interface INetworkClient
     World? World { get; }
 
     /// <summary>
+    /// Whether the world has changed and needs mesh regeneration
+    /// </summary>
+    bool WorldChanged { get; set; }
+
+    /// <summary>
     /// Connect to a game server
     /// </summary>
     void Connect(string host, int port, string playerName);
@@ -36,4 +41,9 @@ public interface INetworkClient
     /// Disconnect from the server
     /// </summary>
     void Disconnect();
+
+    /// <summary>
+    /// Send a block update to the server
+    /// </summary>
+    void SendBlockUpdate(int x, int y, int z, BlockType blockType);
 }

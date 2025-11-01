@@ -134,6 +134,19 @@ public class Game : GameWindow
             GenerateMeshesFromWorld(_networkClient.World);
             _meshesGenerated = true;
         }
+
+        // Handle block interaction if world is loaded
+        if (_networkClient.WorldReceived && _networkClient.World != null)
+        {
+            HandleBlockInteraction();
+
+            // Regenerate meshes if world changed
+            if (_networkClient.WorldChanged)
+            {
+                GenerateMeshesFromWorld(_networkClient.World);
+                _networkClient.WorldChanged = false;
+            }
+        }
     }
 
     private void GenerateMeshesFromWorld(World world)
@@ -156,6 +169,58 @@ public class Game : GameWindow
         }
 
         _logger.LogInformation("Generated {Count} block meshes with face culling", _blockMeshes.Count);
+    }
+
+    private void HandleBlockInteraction()
+    {
+        // Left click - break block
+        if (MouseState.IsButtonPressed(MouseButton.Left))
+        {
+            var hit = Raycaster.Cast(_networkClient.World!, _camera.Position, _camera.Front);
+            if (hit != null)
+            {
+                _logger.LogInformation("Breaking block at ({X},{Y},{Z})",
+                    hit.BlockPosition.X, hit.BlockPosition.Y, hit.BlockPosition.Z);
+
+                // Send update to server (set to Air to break)
+                _networkClient.SendBlockUpdate(
+                    hit.BlockPosition.X,
+                    hit.BlockPosition.Y,
+                    hit.BlockPosition.Z,
+                    BlockType.Air);
+            }
+        }
+
+        // Right click - place block
+        if (MouseState.IsButtonPressed(MouseButton.Right))
+        {
+            var hit = Raycaster.Cast(_networkClient.World!, _camera.Position, _camera.Front);
+            if (hit != null)
+            {
+                // Calculate position to place the block (adjacent to hit face)
+                TerraNova.Shared.Vector3i placePos = GetAdjacentBlockPosition(hit.BlockPosition, hit.HitFace);
+
+                _logger.LogInformation("Placing block at ({X},{Y},{Z})",
+                    placePos.X, placePos.Y, placePos.Z);
+
+                // Send update to server (place a Grass block for now)
+                _networkClient.SendBlockUpdate(placePos.X, placePos.Y, placePos.Z, BlockType.Grass);
+            }
+        }
+    }
+
+    private TerraNova.Shared.Vector3i GetAdjacentBlockPosition(TerraNova.Shared.Vector3i blockPos, BlockFace face)
+    {
+        return face switch
+        {
+            BlockFace.Front => new TerraNova.Shared.Vector3i(blockPos.X, blockPos.Y, blockPos.Z + 1),
+            BlockFace.Back => new TerraNova.Shared.Vector3i(blockPos.X, blockPos.Y, blockPos.Z - 1),
+            BlockFace.Left => new TerraNova.Shared.Vector3i(blockPos.X - 1, blockPos.Y, blockPos.Z),
+            BlockFace.Right => new TerraNova.Shared.Vector3i(blockPos.X + 1, blockPos.Y, blockPos.Z),
+            BlockFace.Top => new TerraNova.Shared.Vector3i(blockPos.X, blockPos.Y + 1, blockPos.Z),
+            BlockFace.Bottom => new TerraNova.Shared.Vector3i(blockPos.X, blockPos.Y - 1, blockPos.Z),
+            _ => blockPos
+        };
     }
 
     /// <summary>
