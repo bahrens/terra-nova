@@ -1,8 +1,10 @@
+using Microsoft.Extensions.Options;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
+using TerraNova.Configuration;
 using TerraNova.Shared;
 
 namespace TerraNova;
@@ -17,20 +19,29 @@ public class Game : GameWindow
     private Vector2 _lastMousePos;
 
     private Shader _shader = null!;
-    private NetworkClient _networkClient = null!;
+    private readonly INetworkClient _networkClient;
+    private readonly NetworkSettings _networkSettings;
+    private readonly CameraSettings _cameraSettings;
     private List<CubeMesh> _blockMeshes = new();
     private Texture _grassTexture = null!;
     private bool _meshesGenerated = false;
 
-    public Game(int width, int height, string title)
+    public Game(
+        IOptions<GameSettings> gameSettings,
+        IOptions<NetworkSettings> networkSettings,
+        IOptions<CameraSettings> cameraSettings,
+        INetworkClient networkClient)
         : base(GameWindowSettings.Default,
                new NativeWindowSettings()
                {
-                   ClientSize = (width, height),
-                   Title = title,
+                   ClientSize = (gameSettings.Value.WindowWidth, gameSettings.Value.WindowHeight),
+                   Title = gameSettings.Value.WindowTitle,
                    Flags = ContextFlags.ForwardCompatible // Use modern OpenGL
                })
     {
+        _networkClient = networkClient;
+        _networkSettings = networkSettings.Value;
+        _cameraSettings = cameraSettings.Value;
     }
 
     /// <summary>
@@ -51,8 +62,13 @@ public class Game : GameWindow
         GL.Enable(EnableCap.CullFace);
         GL.CullFace(TriangleFace.Back);
 
-        // Initialize camera (start at position 0, 5, 10)
-        _camera = new Camera(new Vector3(0.0f, 5.0f, 10.0f));
+        // Initialize camera with configured settings (start at position 0, 5, 10)
+        _camera = new Camera(new Vector3(0.0f, 5.0f, 10.0f))
+        {
+            Speed = _cameraSettings.MovementSpeed,
+            Sensitivity = _cameraSettings.MouseSensitivity,
+            Fov = _cameraSettings.FieldOfView
+        };
 
         // Capture and hide the mouse cursor for FPS controls
         CursorState = CursorState.Grabbed;
@@ -66,10 +82,9 @@ public class Game : GameWindow
         byte[] grassPixels = TextureGenerator.GenerateTexture(BlockType.Grass, 16);
         _grassTexture = new Texture(16, 16, grassPixels);
 
-        // Connect to server
-        _networkClient = new NetworkClient();
-        _networkClient.Connect("localhost", 9050, "Player");
-        Console.WriteLine("Connecting to server...");
+        // Connect to server using configured settings
+        _networkClient.Connect(_networkSettings.ServerHost, _networkSettings.ServerPort, _networkSettings.PlayerName);
+        Console.WriteLine($"Connecting to {_networkSettings.ServerHost}:{_networkSettings.ServerPort}...");
 
         Console.WriteLine("OpenGL Version: " + GL.GetString(StringName.Version));
         Console.WriteLine("Terra Nova initialized!");

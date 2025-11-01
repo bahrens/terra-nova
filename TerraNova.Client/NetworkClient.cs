@@ -7,7 +7,7 @@ namespace TerraNova;
 /// <summary>
 /// Network client that connects to the game server and syncs world data
 /// </summary>
-public class NetworkClient : INetEventListener
+public class NetworkClient : INetworkClient, INetEventListener
 {
     private readonly NetManager _netManager;
     private NetPeer? _serverPeer;

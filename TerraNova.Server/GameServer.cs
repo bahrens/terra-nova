@@ -1,5 +1,7 @@
 using LiteNetLib;
 using LiteNetLib.Utils;
+using Microsoft.Extensions.Options;
+using TerraNova.Server.Configuration;
 using TerraNova.Shared;
 
 namespace TerraNova.Server;
@@ -7,42 +9,53 @@ namespace TerraNova.Server;
 /// <summary>
 /// Authoritative game server that manages world state and client connections
 /// </summary>
-public class GameServer : INetEventListener
+public class GameServer : IGameServer, INetEventListener
 {
     private readonly NetManager _netManager;
     private readonly World _world;
-    private readonly int _port;
+    private readonly ServerSettings _serverSettings;
+    private readonly WorldSettings _worldSettings;
 
-    public GameServer(int port = 9050)
+    public GameServer(IOptions<ServerSettings> serverSettings, IOptions<WorldSettings> worldSettings)
     {
-        _port = port;
+        _serverSettings = serverSettings.Value;
+        _worldSettings = worldSettings.Value;
         _netManager = new NetManager(this);
         _world = new World();
 
-        // Generate initial world (5x5x5 cube for now)
+        // Generate initial world using configured dimensions
         InitializeWorld();
     }
 
     private void InitializeWorld()
     {
         Console.WriteLine("Generating world...");
-        for (int x = -2; x <= 2; x++)
+
+        // Calculate world bounds from center
+        int halfX = _worldSettings.WorldSizeX / 2;
+        int halfZ = _worldSettings.WorldSizeZ / 2;
+
+        for (int x = -halfX; x <= halfX; x++)
         {
-            for (int y = 0; y < 5; y++)
+            for (int y = 0; y < _worldSettings.WorldSizeY; y++)
             {
-                for (int z = -2; z <= 2; z++)
+                for (int z = -halfZ; z <= halfZ; z++)
                 {
                     _world.SetBlock(x, y, z, BlockType.Grass);
                 }
             }
         }
-        Console.WriteLine("World generated: 125 blocks");
+
+        int totalBlocks = _worldSettings.WorldSizeX * _worldSettings.WorldSizeY * _worldSettings.WorldSizeZ;
+        Console.WriteLine($"World generated: {totalBlocks} blocks ({_worldSettings.WorldSizeX}x{_worldSettings.WorldSizeY}x{_worldSettings.WorldSizeZ})");
     }
 
     public void Start()
     {
-        _netManager.Start(_port);
-        Console.WriteLine($"Server started on port {_port}");
+        _netManager.Start(_serverSettings.Port);
+        Console.WriteLine($"Server started on port {_serverSettings.Port}");
+        Console.WriteLine($"Max clients: {_serverSettings.MaxClients}");
+        Console.WriteLine($"Tick rate: {_serverSettings.TickRate} Hz");
         Console.WriteLine("Waiting for clients...");
     }
 

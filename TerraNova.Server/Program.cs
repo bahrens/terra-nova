@@ -1,27 +1,29 @@
-﻿using TerraNova.Server;
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using TerraNova.Server;
+using TerraNova.Server.Configuration;
 
 Console.WriteLine("=== Terra Nova Server ===");
 Console.WriteLine();
 
-var server = new GameServer(port: 9050);
-server.Start();
+// Build the host with dependency injection
+var host = Host.CreateDefaultBuilder(args)
+    .ConfigureAppConfiguration((context, config) =>
+    {
+        config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+    })
+    .ConfigureServices((context, services) =>
+    {
+        // Bind configuration sections
+        services.Configure<ServerSettings>(context.Configuration.GetSection("ServerSettings"));
+        services.Configure<WorldSettings>(context.Configuration.GetSection("WorldSettings"));
 
-Console.WriteLine("Press Ctrl+C to stop the server");
-Console.WriteLine();
+        // Register services
+        services.AddSingleton<IGameServer, GameServer>();
+        services.AddHostedService<ServerWorker>();
+    })
+    .Build();
 
-// Server update loop
-var running = true;
-Console.CancelKeyPress += (s, e) =>
-{
-    e.Cancel = true;
-    running = false;
-    Console.WriteLine("\nShutting down...");
-};
-
-while (running)
-{
-    server.Update();
-    Thread.Sleep(15); // ~60 updates per second
-}
-
-server.Stop();
+// Run the host (which will start the ServerWorker)
+await host.RunAsync();

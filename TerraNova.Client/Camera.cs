@@ -41,7 +41,9 @@ public class Camera
     /// </summary>
     public Matrix4 GetProjectionMatrix(float aspectRatio)
     {
-        return Matrix4.CreatePerspectiveFieldOfView(Fov, aspectRatio, 0.1f, 1000.0f);
+        // Convert FOV from degrees to radians
+        float fovRadians = MathHelper.DegreesToRadians(Fov);
+        return Matrix4.CreatePerspectiveFieldOfView(fovRadians, aspectRatio, 0.1f, 1000.0f);
     }
 
     /// <summary>
