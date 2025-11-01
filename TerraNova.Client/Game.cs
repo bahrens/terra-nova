@@ -17,9 +17,10 @@ public class Game : GameWindow
     private Vector2 _lastMousePos;
 
     private Shader _shader = null!;
-    private World _world = null!;
-    private List<CubeMesh> _blockMeshes = null!;
+    private NetworkClient _networkClient = null!;
+    private List<CubeMesh> _blockMeshes = new();
     private Texture _grassTexture = null!;
+    private bool _meshesGenerated = false;
 
     public Game(int width, int height, string title)
         : base(GameWindowSettings.Default,
@@ -65,32 +66,10 @@ public class Game : GameWindow
         byte[] grassPixels = TextureGenerator.GenerateTexture(BlockType.Grass, 16);
         _grassTexture = new Texture(16, 16, grassPixels);
 
-        // Create world and add blocks
-        _world = new World();
-
-        // Build a small 5x5x5 cube of blocks to demonstrate face culling
-        for (int x = -2; x <= 2; x++)
-        {
-            for (int y = 0; y < 5; y++)
-            {
-                for (int z = -2; z <= 2; z++)
-                {
-                    _world.SetBlock(x, y, z, BlockType.Grass);
-                }
-            }
-        }
-
-        // Generate meshes for all blocks with face culling
-        _blockMeshes = new List<CubeMesh>();
-        foreach (var (pos, blockType) in _world.GetAllBlocks())
-        {
-            BlockFaces visibleFaces = _world.GetVisibleFaces(pos.X, pos.Y, pos.Z);
-            var mesh = new CubeMesh(new Vector3(pos.X, pos.Y, pos.Z), blockType, visibleFaces);
-            _blockMeshes.Add(mesh);
-        }
-
-        int totalBlocks = _blockMeshes.Count;
-        Console.WriteLine($"Generated {totalBlocks} blocks with face culling");
+        // Connect to server
+        _networkClient = new NetworkClient();
+        _networkClient.Connect("localhost", 9050, "Player");
+        Console.WriteLine("Connecting to server...");
 
         Console.WriteLine("OpenGL Version: " + GL.GetString(StringName.Version));
         Console.WriteLine("Terra Nova initialized!");
@@ -126,6 +105,38 @@ public class Game : GameWindow
             _camera.ProcessKeyboard(CameraMovement.Up, deltaTime);
         if (KeyboardState.IsKeyDown(Keys.LeftShift))
             _camera.ProcessKeyboard(CameraMovement.Down, deltaTime);
+
+        // Poll network events
+        _networkClient.Update();
+
+        // Generate meshes once world data is received
+        if (_networkClient.WorldReceived && !_meshesGenerated && _networkClient.World != null)
+        {
+            GenerateMeshesFromWorld(_networkClient.World);
+            _meshesGenerated = true;
+        }
+    }
+
+    private void GenerateMeshesFromWorld(World world)
+    {
+        Console.WriteLine("Generating meshes from server world data...");
+
+        // Clear any existing meshes
+        foreach (var mesh in _blockMeshes)
+        {
+            mesh.Dispose();
+        }
+        _blockMeshes.Clear();
+
+        // Generate meshes for all blocks with face culling
+        foreach (var (pos, blockType) in world.GetAllBlocks())
+        {
+            BlockFaces visibleFaces = world.GetVisibleFaces(pos.X, pos.Y, pos.Z);
+            var mesh = new CubeMesh(new Vector3(pos.X, pos.Y, pos.Z), blockType, visibleFaces);
+            _blockMeshes.Add(mesh);
+        }
+
+        Console.WriteLine($"Generated {_blockMeshes.Count} block meshes with face culling");
     }
 
     /// <summary>
@@ -208,6 +219,7 @@ public class Game : GameWindow
         base.OnUnload();
 
         // Clean up resources
+        _networkClient?.Disconnect();
         _shader?.Dispose();
         _grassTexture?.Dispose();
 
