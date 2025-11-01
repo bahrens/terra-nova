@@ -29,9 +29,11 @@ public static class Raycaster
             Vector3 currentPosition = origin + direction * distance;
 
             // Convert to block coordinates
-            int x = (int)Math.Floor(currentPosition.X);
-            int y = (int)Math.Floor(currentPosition.Y);
-            int z = (int)Math.Floor(currentPosition.Z);
+            // Since blocks are centered at integer positions (from -0.5 to +0.5),
+            // we use rounding instead of floor
+            int x = (int)Math.Round(currentPosition.X, MidpointRounding.AwayFromZero);
+            int y = (int)Math.Round(currentPosition.Y, MidpointRounding.AwayFromZero);
+            int z = (int)Math.Round(currentPosition.Z, MidpointRounding.AwayFromZero);
 
             // Check if there's a block at this position
             BlockType blockType = world.GetBlock(x, y, z);

@@ -27,6 +27,8 @@ public class Game : GameWindow
     private List<CubeMesh> _blockMeshes = new();
     private Texture _grassTexture = null!;
     private bool _meshesGenerated = false;
+    private Crosshair _crosshair = null!;
+    private WireframeBox _wireframeBox = null!;
 
     public Game(
         IOptions<GameSettings> gameSettings,
@@ -85,6 +87,13 @@ public class Game : GameWindow
         // Generate procedural texture for grass block
         byte[] grassPixels = TextureGenerator.GenerateTexture(BlockType.Grass, 16);
         _grassTexture = new Texture(16, 16, grassPixels);
+
+        // Initialize UI overlays
+        _crosshair = new Crosshair();
+        _crosshair.Initialize();
+
+        _wireframeBox = new WireframeBox();
+        _wireframeBox.Initialize();
 
         // Connect to server using configured settings
         _networkClient.Connect(_networkSettings.ServerHost, _networkSettings.ServerPort, _networkSettings.PlayerName);
@@ -256,6 +265,20 @@ public class Game : GameWindow
             mesh.Draw();
         }
 
+        // Draw wireframe box around selected block
+        if (_networkClient.WorldReceived && _networkClient.World != null)
+        {
+            var hit = Raycaster.Cast(_networkClient.World, _camera.Position, _camera.Front);
+            if (hit != null)
+            {
+                Vector3 blockPos = new Vector3(hit.BlockPosition.X, hit.BlockPosition.Y, hit.BlockPosition.Z);
+                _wireframeBox.Draw(blockPos, view, projection);
+            }
+        }
+
+        // Draw crosshair on top of everything
+        _crosshair.Draw();
+
         // Swap the front and back buffers (double buffering)
         SwapBuffers();
     }
@@ -306,6 +329,8 @@ public class Game : GameWindow
         _networkClient?.Disconnect();
         _shader?.Dispose();
         _grassTexture?.Dispose();
+        _crosshair?.Dispose();
+        _wireframeBox?.Dispose();
 
         if (_blockMeshes != null)
         {
