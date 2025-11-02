@@ -1,37 +1,50 @@
 namespace TerraNova.Shared;
 
 /// <summary>
-/// Manages the voxel world and block placement
+/// Manages the voxel world and block placement using chunk-based storage
 /// </summary>
 public class World
 {
-    // Simple dictionary to store blocks at integer positions
-    private readonly Dictionary<Vector3i, BlockType> _blocks = new();
+    // Dictionary to store chunks by their chunk position
+    private readonly Dictionary<Vector3i, Chunk> _chunks = new();
 
     /// <summary>
-    /// Sets a block at the given position
+    /// Sets a block at the given world position
     /// </summary>
     public void SetBlock(int x, int y, int z, BlockType blockType)
     {
-        var pos = new Vector3i(x, y, z);
+        // Calculate which chunk this block belongs to
+        Vector3i chunkPos = Chunk.WorldToChunkPosition(x, y, z);
+        Vector3i localPos = Chunk.WorldToLocalPosition(x, y, z);
 
-        if (blockType == BlockType.Air)
+        // Get or create the chunk
+        if (!_chunks.TryGetValue(chunkPos, out var chunk))
         {
-            _blocks.Remove(pos);
+            chunk = new Chunk(chunkPos);
+            _chunks[chunkPos] = chunk;
         }
-        else
-        {
-            _blocks[pos] = blockType;
-        }
+
+        // Set the block in the chunk
+        chunk.SetBlock(localPos.X, localPos.Y, localPos.Z, blockType);
+
+        // If setting to Air and chunk is now empty, could remove chunk (optimization for later)
+        // For now, keep the chunk even if empty
     }
 
     /// <summary>
-    /// Gets the block at the given position (returns Air if no block exists)
+    /// Gets the block at the given world position (returns Air if no block exists)
     /// </summary>
     public BlockType GetBlock(int x, int y, int z)
     {
-        var pos = new Vector3i(x, y, z);
-        return _blocks.TryGetValue(pos, out var blockType) ? blockType : BlockType.Air;
+        // Calculate which chunk this block belongs to
+        Vector3i chunkPos = Chunk.WorldToChunkPosition(x, y, z);
+        Vector3i localPos = Chunk.WorldToLocalPosition(x, y, z);
+
+        // Get the chunk (if it doesn't exist, return Air)
+        if (!_chunks.TryGetValue(chunkPos, out var chunk))
+            return BlockType.Air;
+
+        return chunk.GetBlock(localPos.X, localPos.Y, localPos.Z);
     }
 
     /// <summary>
@@ -43,14 +56,46 @@ public class World
     }
 
     /// <summary>
-    /// Gets all block positions and types
+    /// Gets all block positions and types (iterates through all chunks)
     /// </summary>
     public IEnumerable<(Vector3i position, BlockType blockType)> GetAllBlocks()
     {
-        foreach (var kvp in _blocks)
+        foreach (var (chunkPos, chunk) in _chunks)
         {
-            yield return (kvp.Key, kvp.Value);
+            // Iterate through all blocks in this chunk
+            for (int x = 0; x < Chunk.ChunkSize; x++)
+            {
+                for (int y = 0; y < Chunk.ChunkSize; y++)
+                {
+                    for (int z = 0; z < Chunk.ChunkSize; z++)
+                    {
+                        BlockType blockType = chunk.GetBlock(x, y, z);
+                        if (blockType != BlockType.Air)
+                        {
+                            Vector3i worldPos = chunk.GetWorldPosition(x, y, z);
+                            yield return (worldPos, blockType);
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    /// <summary>
+    /// Gets all chunks in the world
+    /// </summary>
+    public IEnumerable<Chunk> GetAllChunks()
+    {
+        return _chunks.Values;
+    }
+
+    /// <summary>
+    /// Gets a specific chunk at the given chunk position (not world position)
+    /// </summary>
+    public Chunk? GetChunk(Vector3i chunkPosition)
+    {
+        _chunks.TryGetValue(chunkPosition, out var chunk);
+        return chunk;
     }
 
     /// <summary>

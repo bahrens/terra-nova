@@ -25,10 +25,15 @@ public class Game : GameWindow
     private readonly NetworkSettings _networkSettings;
     private readonly CameraSettings _cameraSettings;
     private readonly ILogger<Game> _logger;
-    private List<CubeMesh> _blockMeshes = new();
+    private List<ChunkMesh> _chunkMeshes = new();
     private Texture _grassTexture = null!;
     private bool _meshesGenerated = false;
     private Crosshair _crosshair = null!;
+
+    // FPS tracking
+    private double _fpsUpdateTimer = 0.0;
+    private int _frameCount = 0;
+    private double _fps = 0.0;
 
     public Game(
         IOptions<GameSettings> gameSettings,
@@ -119,6 +124,17 @@ public class Game : GameWindow
     {
         base.OnUpdateFrame(args);
 
+        // Update FPS counter
+        _frameCount++;
+        _fpsUpdateTimer += args.Time;
+        if (_fpsUpdateTimer >= 0.5) // Update every 0.5 seconds
+        {
+            _fps = _frameCount / _fpsUpdateTimer;
+            Title = $"Terra Nova - FPS: {_fps:F0}";
+            _frameCount = 0;
+            _fpsUpdateTimer = 0.0;
+        }
+
         // Close window when Escape is pressed
         if (KeyboardState.IsKeyDown(Keys.Escape))
         {
@@ -167,24 +183,24 @@ public class Game : GameWindow
 
     private void GenerateMeshesFromWorld(World world)
     {
-        _logger.LogInformation("Generating meshes from server world data...");
+        _logger.LogInformation("Generating chunk meshes from server world data...");
 
         // Clear any existing meshes
-        foreach (var mesh in _blockMeshes)
+        foreach (var mesh in _chunkMeshes)
         {
             mesh.Dispose();
         }
-        _blockMeshes.Clear();
+        _chunkMeshes.Clear();
 
-        // Generate meshes for all blocks with face culling
-        foreach (var (pos, blockType) in world.GetAllBlocks())
+        // Generate one mesh per chunk (huge performance improvement!)
+        foreach (var chunk in world.GetAllChunks())
         {
-            BlockFaces visibleFaces = world.GetVisibleFaces(pos.X, pos.Y, pos.Z);
-            var mesh = new CubeMesh(new Vector3(pos.X, pos.Y, pos.Z), blockType, visibleFaces);
-            _blockMeshes.Add(mesh);
+            var chunkMesh = new ChunkMesh(chunk, world);
+            _chunkMeshes.Add(chunkMesh);
         }
 
-        _logger.LogInformation("Generated {Count} block meshes with face culling", _blockMeshes.Count);
+        _logger.LogInformation("Generated {Count} chunk meshes (was {BlockCount} individual block meshes before optimization)",
+            _chunkMeshes.Count, world.GetAllBlocks().Count());
     }
 
     private void HandleBlockInteraction()
@@ -267,30 +283,49 @@ public class Game : GameWindow
             }
         }
 
-        // Draw all blocks
-        foreach (var mesh in _blockMeshes)
+        // Draw all chunks with normal shader
+        _shader.Use();
+        _grassTexture.Bind(0);
+        _shader.SetInt("blockTexture", 0);
+        _shader.SetMatrix4("view", view);
+        _shader.SetMatrix4("projection", projection);
+        _shader.SetMatrix4("model", model);
+
+        foreach (var chunkMesh in _chunkMeshes)
         {
-            // Check if this is the selected block
-            bool isSelected = selectedBlockPos.HasValue &&
-                             mesh.Position.X == selectedBlockPos.Value.X &&
-                             mesh.Position.Y == selectedBlockPos.Value.Y &&
-                             mesh.Position.Z == selectedBlockPos.Value.Z;
+            chunkMesh.Draw();
+        }
 
-            // Choose shader based on selection
-            Shader currentShader = isSelected ? _borderedShader : _shader;
-            currentShader.Use();
+        // If a block is selected, draw it again with the bordered shader for highlighting
+        if (selectedBlockPos.HasValue && _networkClient.World != null)
+        {
+            BlockType selectedBlockType = _networkClient.World.GetBlock(
+                selectedBlockPos.Value.X,
+                selectedBlockPos.Value.Y,
+                selectedBlockPos.Value.Z);
 
-            // Bind the texture
-            _grassTexture.Bind(0);
-            currentShader.SetInt("blockTexture", 0);
+            if (selectedBlockType != BlockType.Air)
+            {
+                BlockFaces visibleFaces = _networkClient.World.GetVisibleFaces(
+                    selectedBlockPos.Value.X,
+                    selectedBlockPos.Value.Y,
+                    selectedBlockPos.Value.Z);
 
-            // Set matrices
-            currentShader.SetMatrix4("view", view);
-            currentShader.SetMatrix4("projection", projection);
-            currentShader.SetMatrix4("model", model);
+                // Create a temporary mesh for the selected block with bordered shader
+                using var selectedBlockMesh = new CubeMesh(
+                    new Vector3(selectedBlockPos.Value.X, selectedBlockPos.Value.Y, selectedBlockPos.Value.Z),
+                    selectedBlockType,
+                    visibleFaces);
 
-            // Draw the mesh
-            mesh.Draw();
+                _borderedShader.Use();
+                _grassTexture.Bind(0);
+                _borderedShader.SetInt("blockTexture", 0);
+                _borderedShader.SetMatrix4("view", view);
+                _borderedShader.SetMatrix4("projection", projection);
+                _borderedShader.SetMatrix4("model", model);
+
+                selectedBlockMesh.Draw();
+            }
         }
 
         // Draw crosshair on top of everything
@@ -349,9 +384,9 @@ public class Game : GameWindow
         _grassTexture?.Dispose();
         _crosshair?.Dispose();
 
-        if (_blockMeshes != null)
+        if (_chunkMeshes != null)
         {
-            foreach (var mesh in _blockMeshes)
+            foreach (var mesh in _chunkMeshes)
             {
                 mesh.Dispose();
             }
