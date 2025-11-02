@@ -15,14 +15,18 @@ public class Crosshair : IDisposable
 
     public void Initialize()
     {
-        // Create shader for 2D rendering
+        // Create shader for 2D rendering with aspect ratio correction
         string vertexShaderSource = @"
 #version 330 core
 layout (location = 0) in vec2 aPosition;
+uniform float aspectRatio;
 
 void main()
 {
-    gl_Position = vec4(aPosition, 0.0, 1.0);
+    vec2 pos = aPosition;
+    // Correct horizontal coordinates by aspect ratio so lines are equal length
+    pos.x /= aspectRatio;
+    gl_Position = vec4(pos, 0.0, 1.0);
 }
 ";
 
@@ -65,12 +69,13 @@ void main()
         GL.BindVertexArray(0);
     }
 
-    public void Draw()
+    public void Draw(float aspectRatio)
     {
         // Disable depth test for 2D overlay
         GL.Disable(EnableCap.DepthTest);
 
         _shader.Use();
+        _shader.SetFloat("aspectRatio", aspectRatio);
         GL.BindVertexArray(_vao);
         GL.DrawArrays(PrimitiveType.Lines, 0, 4);
         GL.BindVertexArray(0);

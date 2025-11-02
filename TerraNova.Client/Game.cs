@@ -73,7 +73,7 @@ public class Game : GameWindow
         {
             Speed = _cameraSettings.MovementSpeed,
             Sensitivity = _cameraSettings.MouseSensitivity,
-            Fov = _cameraSettings.FieldOfView
+            Fov = MathHelper.DegreesToRadians(_cameraSettings.FieldOfView)
         };
 
         // Capture and hide the mouse cursor for FPS controls
@@ -252,7 +252,8 @@ public class Game : GameWindow
 
         // Set view and projection matrices (same for all blocks)
         Matrix4 view = _camera.GetViewMatrix();
-        Matrix4 projection = _camera.GetProjectionMatrix((float)ClientSize.X / ClientSize.Y);
+        float aspectRatio = (float)ClientSize.X / ClientSize.Y;
+        Matrix4 projection = _camera.GetProjectionMatrix(aspectRatio);
         Matrix4 model = Matrix4.Identity; // Blocks are already positioned, so model is identity
 
         // Find which block is selected (if any)
@@ -293,7 +294,7 @@ public class Game : GameWindow
         }
 
         // Draw crosshair on top of everything
-        _crosshair.Draw();
+        _crosshair.Draw(aspectRatio);
 
         // Swap the front and back buffers (double buffering)
         SwapBuffers();
