@@ -20,17 +20,17 @@ public static class Raycaster
     {
         direction = direction.Normalized();
 
-        // Step along the ray
+        // DDA-style voxel traversal to find potential blocks
+        // Start by stepping along the ray with a small step size
         float step = 0.1f;
-        Vector3 previousPosition = origin;
+        RaycastHit? closestHit = null;
+        float closestDistance = float.MaxValue;
 
         for (float distance = 0; distance < maxDistance; distance += step)
         {
             Vector3 currentPosition = origin + direction * distance;
 
             // Convert to block coordinates
-            // Since blocks are centered at integer positions (from -0.5 to +0.5),
-            // we use rounding instead of floor
             int x = (int)Math.Round(currentPosition.X, MidpointRounding.AwayFromZero);
             int y = (int)Math.Round(currentPosition.Y, MidpointRounding.AwayFromZero);
             int z = (int)Math.Round(currentPosition.Z, MidpointRounding.AwayFromZero);
@@ -40,44 +40,111 @@ public static class Raycaster
 
             if (blockType != BlockType.Air)
             {
-                // We hit a block! Determine which face was hit
-                BlockFace hitFace = DetermineHitFace(previousPosition, currentPosition);
-
-                return new RaycastHit
+                // Found a solid block - do precise AABB intersection test
+                var hit = IntersectAABB(origin, direction, new Vector3(x, y, z));
+                if (hit.HasValue && hit.Value.Distance < closestDistance)
                 {
-                    BlockPosition = new TerraNova.Shared.Vector3i(x, y, z),
-                    BlockType = blockType,
-                    HitFace = hitFace,
-                    Distance = distance
-                };
+                    closestDistance = hit.Value.Distance;
+                    closestHit = new RaycastHit
+                    {
+                        BlockPosition = new TerraNova.Shared.Vector3i(x, y, z),
+                        BlockType = blockType,
+                        HitFace = hit.Value.Face,
+                        Distance = hit.Value.Distance
+                    };
+                    // Found a hit, return it
+                    return closestHit;
+                }
             }
-
-            previousPosition = currentPosition;
         }
 
-        return null; // No block hit
+        return closestHit;
     }
 
-    private static BlockFace DetermineHitFace(Vector3 previousPos, Vector3 hitPos)
+    /// <summary>
+    /// Performs precise ray-AABB intersection test and determines which face was hit
+    /// </summary>
+    private static (float Distance, BlockFace Face)? IntersectAABB(Vector3 rayOrigin, Vector3 rayDirection, Vector3 blockCenter)
     {
-        // Calculate which axis changed the most
-        Vector3 delta = hitPos - previousPos;
-        float absX = Math.Abs(delta.X);
-        float absY = Math.Abs(delta.Y);
-        float absZ = Math.Abs(delta.Z);
+        // Block extends from -0.5 to +0.5 around its center
+        Vector3 boxMin = blockCenter - new Vector3(0.5f, 0.5f, 0.5f);
+        Vector3 boxMax = blockCenter + new Vector3(0.5f, 0.5f, 0.5f);
 
-        if (absX > absY && absX > absZ)
+        // Compute intersection distances for each slab
+        float tMin = 0.0f;
+        float tMax = float.MaxValue;
+        BlockFace hitFace = BlockFace.Front;
+
+        // X slab
+        if (Math.Abs(rayDirection.X) > 0.0001f)
         {
-            return delta.X > 0 ? BlockFace.Left : BlockFace.Right;
+            float t1 = (boxMin.X - rayOrigin.X) / rayDirection.X;
+            float t2 = (boxMax.X - rayOrigin.X) / rayDirection.X;
+            float tNear = Math.Min(t1, t2);
+            float tFar = Math.Max(t1, t2);
+
+            if (tNear > tMin)
+            {
+                tMin = tNear;
+                hitFace = rayDirection.X > 0 ? BlockFace.Left : BlockFace.Right;
+            }
+            tMax = Math.Min(tMax, tFar);
+
+            if (tMin > tMax) return null;
         }
-        else if (absY > absX && absY > absZ)
+        else if (rayOrigin.X < boxMin.X || rayOrigin.X > boxMax.X)
         {
-            return delta.Y > 0 ? BlockFace.Bottom : BlockFace.Top;
+            return null;
         }
-        else
+
+        // Y slab
+        if (Math.Abs(rayDirection.Y) > 0.0001f)
         {
-            return delta.Z > 0 ? BlockFace.Back : BlockFace.Front;
+            float t1 = (boxMin.Y - rayOrigin.Y) / rayDirection.Y;
+            float t2 = (boxMax.Y - rayOrigin.Y) / rayDirection.Y;
+            float tNear = Math.Min(t1, t2);
+            float tFar = Math.Max(t1, t2);
+
+            if (tNear > tMin)
+            {
+                tMin = tNear;
+                hitFace = rayDirection.Y > 0 ? BlockFace.Bottom : BlockFace.Top;
+            }
+            tMax = Math.Min(tMax, tFar);
+
+            if (tMin > tMax) return null;
         }
+        else if (rayOrigin.Y < boxMin.Y || rayOrigin.Y > boxMax.Y)
+        {
+            return null;
+        }
+
+        // Z slab
+        if (Math.Abs(rayDirection.Z) > 0.0001f)
+        {
+            float t1 = (boxMin.Z - rayOrigin.Z) / rayDirection.Z;
+            float t2 = (boxMax.Z - rayOrigin.Z) / rayDirection.Z;
+            float tNear = Math.Min(t1, t2);
+            float tFar = Math.Max(t1, t2);
+
+            if (tNear > tMin)
+            {
+                tMin = tNear;
+                hitFace = rayDirection.Z > 0 ? BlockFace.Back : BlockFace.Front;
+            }
+            tMax = Math.Min(tMax, tFar);
+
+            if (tMin > tMax) return null;
+        }
+        else if (rayOrigin.Z < boxMin.Z || rayOrigin.Z > boxMax.Z)
+        {
+            return null;
+        }
+
+        // If tMin is negative, the ray origin is inside the box
+        if (tMin < 0) return null;
+
+        return (tMin, hitFace);
     }
 }
 
