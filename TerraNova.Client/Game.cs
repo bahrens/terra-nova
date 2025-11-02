@@ -93,9 +93,9 @@ public class Game : GameWindow
         string borderedFragmentShaderSource = File.ReadAllText("Shaders/bordered.frag");
         _borderedShader = new Shader(vertexShaderSource, borderedFragmentShaderSource);
 
-        // Generate procedural texture for grass block
-        byte[] grassPixels = TextureGenerator.GenerateTexture(BlockType.Grass, 16);
-        _grassTexture = new Texture(16, 16, grassPixels);
+        // Generate grayscale noisy texture (multiplied with vertex colors for variation)
+        byte[] noisePixels = TextureGenerator.GenerateGrayscaleNoiseTexture(16);
+        _grassTexture = new Texture(16, 16, noisePixels);
 
         // Initialize UI overlays
         _crosshair = new Crosshair();

@@ -32,26 +32,66 @@ public class GameServer : IGameServer, INetEventListener
 
     private void InitializeWorld()
     {
-        _logger.LogInformation("Generating world...");
+        _logger.LogInformation("Generating procedural terrain...");
 
         // Calculate world bounds from center
         int halfX = _worldSettings.WorldSizeX / 2;
         int halfZ = _worldSettings.WorldSizeZ / 2;
 
+        // Simplex noise parameters for terrain generation
+        float scale = 0.05f;  // Controls terrain "smoothness" - lower = smoother/larger features
+        float heightMultiplier = 8.0f;  // How tall the hills/valleys are
+        int baseHeight = 4;  // Minimum terrain height
+
+        // Use a fixed seed for consistent terrain generation
+        SimplexNoise.Noise.Seed = 12345;
+
+        int blocksGenerated = 0;
+
+        // Generate terrain using height map
         for (int x = -halfX; x <= halfX; x++)
         {
-            for (int y = 0; y < _worldSettings.WorldSizeY; y++)
+            for (int z = -halfZ; z <= halfZ; z++)
             {
-                for (int z = -halfZ; z <= halfZ; z++)
+                // Sample Simplex noise to get terrain height at this X,Z position
+                // Noise returns value between 0 and 255
+                float noiseValue = (float)SimplexNoise.Noise.CalcPixel2D(x, z, scale);
+
+                // Convert noise (0-255) to height value
+                int terrainHeight = baseHeight + (int)((noiseValue / 255.0f) * heightMultiplier);
+
+                // Clamp height to world bounds
+                terrainHeight = Math.Min(terrainHeight, _worldSettings.WorldSizeY - 1);
+
+                // Fill column from y=0 up to terrain height with layered blocks
+                for (int y = 0; y <= terrainHeight; y++)
                 {
-                    _world.SetBlock(x, y, z, BlockType.Grass);
+                    BlockType blockType;
+
+                    // Top layer: grass
+                    if (y == terrainHeight)
+                    {
+                        blockType = BlockType.Grass;
+                    }
+                    // Next 3 layers: dirt
+                    else if (y >= terrainHeight - 3)
+                    {
+                        blockType = BlockType.Dirt;
+                    }
+                    // Everything below: stone
+                    else
+                    {
+                        blockType = BlockType.Stone;
+                    }
+
+                    _world.SetBlock(x, y, z, blockType);
+                    blocksGenerated++;
                 }
             }
         }
 
-        int totalBlocks = _worldSettings.WorldSizeX * _worldSettings.WorldSizeY * _worldSettings.WorldSizeZ;
-        _logger.LogInformation("World generated: {TotalBlocks} blocks ({SizeX}x{SizeY}x{SizeZ})",
-            totalBlocks, _worldSettings.WorldSizeX, _worldSettings.WorldSizeY, _worldSettings.WorldSizeZ);
+        _logger.LogInformation("Procedural terrain generated: {BlockCount} blocks with varied heights",
+            blocksGenerated);
     }
 
     public void Start()

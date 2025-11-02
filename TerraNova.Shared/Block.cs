@@ -26,12 +26,12 @@ public static class BlockHelper
     {
         return blockType switch
         {
-            BlockType.Grass => (0.2f, 0.8f, 0.2f),  // Green
-            BlockType.Dirt => (0.6f, 0.4f, 0.2f),   // Brown
-            BlockType.Stone => (0.5f, 0.5f, 0.5f),  // Gray
-            BlockType.Wood => (0.6f, 0.3f, 0.1f),   // Dark brown
-            BlockType.Sand => (0.9f, 0.9f, 0.6f),   // Yellow-ish
-            _ => (1.0f, 1.0f, 1.0f)                  // White (default)
+            BlockType.Grass => (0.4f, 0.65f, 0.35f),    // Darker grass green
+            BlockType.Dirt => (0.55f, 0.42f, 0.30f),    // Minecraft brown
+            BlockType.Stone => (0.6f, 0.6f, 0.6f),      // Lighter neutral gray
+            BlockType.Wood => (0.6f, 0.3f, 0.1f),       // Dark brown
+            BlockType.Sand => (0.9f, 0.9f, 0.6f),       // Yellow-ish
+            _ => (1.0f, 1.0f, 1.0f)                     // White (default)
         };
     }
 }

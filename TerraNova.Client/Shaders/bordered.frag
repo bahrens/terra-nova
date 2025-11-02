@@ -27,8 +27,8 @@ void main()
     // Smooth transition from border to texture
     float borderMix = smoothstep(borderWidth - aaWidth, borderWidth, distFromEdge);
 
-    // Mix between border color (black) and texture
+    // Mix between border color (black) and textured vertex color
     vec4 borderColor = vec4(0.0, 0.0, 0.0, 1.0);
-    vec4 textureColor = texColor * vec4(vertexColor, 1.0);
-    FragColor = mix(borderColor, textureColor, borderMix);
+    vec4 blockColor = texColor * vec4(vertexColor, 1.0);
+    FragColor = mix(borderColor, blockColor, borderMix);
 }

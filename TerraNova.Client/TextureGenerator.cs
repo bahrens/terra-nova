@@ -10,6 +10,30 @@ public static class TextureGenerator
     private static readonly Random _random = new Random(42); // Fixed seed for consistency
 
     /// <summary>
+    /// Generates a grayscale noise texture (for multiplying with vertex colors)
+    /// </summary>
+    /// <param name="size">Texture size (width and height in pixels)</param>
+    /// <returns>RGBA pixel data</returns>
+    public static byte[] GenerateGrayscaleNoiseTexture(int size = 16)
+    {
+        byte[] pixels = new byte[size * size * 4];
+
+        for (int i = 0; i < size * size; i++)
+        {
+            int baseIndex = i * 4;
+            // Generate grayscale noise around 200-255 for subtle variation
+            int noise = _random.Next(200, 256);
+
+            pixels[baseIndex + 0] = (byte)noise;
+            pixels[baseIndex + 1] = (byte)noise;
+            pixels[baseIndex + 2] = (byte)noise;
+            pixels[baseIndex + 3] = 255; // Alpha
+        }
+
+        return pixels;
+    }
+
+    /// <summary>
     /// Generates a texture for the given block type
     /// </summary>
     /// <param name="blockType">Type of block to generate texture for</param>

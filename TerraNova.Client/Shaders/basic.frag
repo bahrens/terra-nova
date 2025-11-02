@@ -12,7 +12,7 @@ uniform sampler2D blockTexture;
 
 void main()
 {
-    // Sample the texture and multiply by vertex color (for lighting/tinting)
+    // Sample grayscale noise texture and multiply by vertex color for pixelated look
     vec4 texColor = texture(blockTexture, texCoord);
     FragColor = texColor * vec4(vertexColor, 1.0);
 }
