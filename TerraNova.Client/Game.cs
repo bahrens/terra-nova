@@ -73,8 +73,8 @@ public class Game : GameWindow
         GL.Enable(EnableCap.CullFace);
         GL.CullFace(TriangleFace.Back);
 
-        // Initialize camera with configured settings (start at position 0, 5, 10)
-        _camera = new Camera(new Vector3(0.0f, 5.0f, 10.0f))
+        // Initialize camera with configured settings (start above and outside the world)
+        _camera = new Camera(new Vector3(0.0f, 25.0f, 50.0f))
         {
             Speed = _cameraSettings.MovementSpeed,
             Sensitivity = _cameraSettings.MouseSensitivity,
