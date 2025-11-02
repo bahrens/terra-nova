@@ -317,6 +317,10 @@ public class Game : GameWindow
                     selectedBlockType,
                     visibleFaces);
 
+                // Enable polygon offset to prevent z-fighting with the chunk mesh
+                GL.Enable(EnableCap.PolygonOffsetFill);
+                GL.PolygonOffset(-1.0f, -1.0f); // Negative values pull towards camera
+
                 _borderedShader.Use();
                 _grassTexture.Bind(0);
                 _borderedShader.SetInt("blockTexture", 0);
@@ -325,6 +329,9 @@ public class Game : GameWindow
                 _borderedShader.SetMatrix4("model", model);
 
                 selectedBlockMesh.Draw();
+
+                // Disable polygon offset after drawing
+                GL.Disable(EnableCap.PolygonOffsetFill);
             }
         }
 
