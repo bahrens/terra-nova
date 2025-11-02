@@ -15,8 +15,11 @@ public class CubeMesh : IDisposable
     private int _indexCount;
     private bool _disposed = false;
 
+    public Vector3 Position { get; private set; }
+
     public CubeMesh(Vector3 position, BlockType blockType, BlockFaces visibleFaces = BlockFaces.All)
     {
+        Position = position;
         GenerateCube(position, blockType, visibleFaces);
     }
 

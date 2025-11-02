@@ -20,6 +20,7 @@ public class Game : GameWindow
     private Vector2 _lastMousePos;
 
     private Shader _shader = null!;
+    private Shader _borderedShader = null!;
     private readonly INetworkClient _networkClient;
     private readonly NetworkSettings _networkSettings;
     private readonly CameraSettings _cameraSettings;
@@ -28,7 +29,6 @@ public class Game : GameWindow
     private Texture _grassTexture = null!;
     private bool _meshesGenerated = false;
     private Crosshair _crosshair = null!;
-    private WireframeBox _wireframeBox = null!;
 
     public Game(
         IOptions<GameSettings> gameSettings,
@@ -84,6 +84,10 @@ public class Game : GameWindow
         string fragmentShaderSource = File.ReadAllText("Shaders/basic.frag");
         _shader = new Shader(vertexShaderSource, fragmentShaderSource);
 
+        // Load bordered shader for selected blocks
+        string borderedFragmentShaderSource = File.ReadAllText("Shaders/bordered.frag");
+        _borderedShader = new Shader(vertexShaderSource, borderedFragmentShaderSource);
+
         // Generate procedural texture for grass block
         byte[] grassPixels = TextureGenerator.GenerateTexture(BlockType.Grass, 16);
         _grassTexture = new Texture(16, 16, grassPixels);
@@ -92,14 +96,17 @@ public class Game : GameWindow
         _crosshair = new Crosshair();
         _crosshair.Initialize();
 
-        _wireframeBox = new WireframeBox();
-        _wireframeBox.Initialize();
-
         // Connect to server using configured settings
         _networkClient.Connect(_networkSettings.ServerHost, _networkSettings.ServerPort, _networkSettings.PlayerName);
         _logger.LogInformation("Connecting to {Host}:{Port}...", _networkSettings.ServerHost, _networkSettings.ServerPort);
 
         _logger.LogInformation("OpenGL Version: {Version}", GL.GetString(StringName.Version));
+
+        // Check max line width supported
+        float[] lineWidthRange = new float[2];
+        GL.GetFloat(GetPName.AliasedLineWidthRange, lineWidthRange);
+        _logger.LogInformation("Line width range: {Min} - {Max}", lineWidthRange[0], lineWidthRange[1]);
+
         _logger.LogInformation("Terra Nova initialized!");
         _logger.LogInformation("Controls: WASD to move, Space/Shift for up/down, Mouse to look, ESC to exit");
     }
@@ -243,37 +250,46 @@ public class Game : GameWindow
         // Clear the screen and depth buffer
         GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
-        // Activate our shader
-        _shader.Use();
-
-        // Bind the texture
-        _grassTexture.Bind(0);
-        _shader.SetInt("blockTexture", 0);
-
         // Set view and projection matrices (same for all blocks)
         Matrix4 view = _camera.GetViewMatrix();
         Matrix4 projection = _camera.GetProjectionMatrix((float)ClientSize.X / ClientSize.Y);
-        _shader.SetMatrix4("view", view);
-        _shader.SetMatrix4("projection", projection);
-
-        // Draw all blocks
         Matrix4 model = Matrix4.Identity; // Blocks are already positioned, so model is identity
-        _shader.SetMatrix4("model", model);
 
-        foreach (var mesh in _blockMeshes)
-        {
-            mesh.Draw();
-        }
-
-        // Draw wireframe box around selected block
+        // Find which block is selected (if any)
+        TerraNova.Shared.Vector3i? selectedBlockPos = null;
         if (_networkClient.WorldReceived && _networkClient.World != null)
         {
             var hit = Raycaster.Cast(_networkClient.World, _camera.Position, _camera.Front);
             if (hit != null)
             {
-                Vector3 blockPos = new Vector3(hit.BlockPosition.X, hit.BlockPosition.Y, hit.BlockPosition.Z);
-                _wireframeBox.Draw(blockPos, view, projection);
+                selectedBlockPos = hit.BlockPosition;
             }
+        }
+
+        // Draw all blocks
+        foreach (var mesh in _blockMeshes)
+        {
+            // Check if this is the selected block
+            bool isSelected = selectedBlockPos.HasValue &&
+                             mesh.Position.X == selectedBlockPos.Value.X &&
+                             mesh.Position.Y == selectedBlockPos.Value.Y &&
+                             mesh.Position.Z == selectedBlockPos.Value.Z;
+
+            // Choose shader based on selection
+            Shader currentShader = isSelected ? _borderedShader : _shader;
+            currentShader.Use();
+
+            // Bind the texture
+            _grassTexture.Bind(0);
+            currentShader.SetInt("blockTexture", 0);
+
+            // Set matrices
+            currentShader.SetMatrix4("view", view);
+            currentShader.SetMatrix4("projection", projection);
+            currentShader.SetMatrix4("model", model);
+
+            // Draw the mesh
+            mesh.Draw();
         }
 
         // Draw crosshair on top of everything
@@ -328,9 +344,9 @@ public class Game : GameWindow
         // Clean up resources
         _networkClient?.Disconnect();
         _shader?.Dispose();
+        _borderedShader?.Dispose();
         _grassTexture?.Dispose();
         _crosshair?.Dispose();
-        _wireframeBox?.Dispose();
 
         if (_blockMeshes != null)
         {
