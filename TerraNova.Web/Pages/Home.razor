@@ -196,7 +196,8 @@
             // Update world data via GameEngine
             gameEngine.NotifyBlockUpdate(x, y, z, (BlockType)blockType);
 
-            // GameEngine.Update will regenerate affected chunk meshes
+            // Defer mesh regeneration to avoid blocking UI
+            await Task.Yield(); // Let UI update first
             gameEngine.Update(0); // Delta time doesn't matter for mesh regeneration
 
             await JS.InvokeVoidAsync("console.log", $"Block update at ({x}, {y}, {z}) processed by GameEngine");

@@ -10,7 +10,7 @@ public class GameEngine
 {
     private readonly IRenderer _renderer;
     private World? _world;
-    private bool _worldChanged = false;
+    private readonly HashSet<Vector3i> _dirtyChunks = new();
 
     public GameEngine(IRenderer renderer)
     {
@@ -28,7 +28,12 @@ public class GameEngine
     public void SetWorld(World world)
     {
         _world = world;
-        _worldChanged = true;
+        // Mark all chunks as dirty when world is loaded
+        _dirtyChunks.Clear();
+        foreach (var chunk in _world.GetAllChunks())
+        {
+            _dirtyChunks.Add(chunk.ChunkPosition);
+        }
     }
 
     /// <summary>
@@ -39,7 +44,27 @@ public class GameEngine
         if (_world != null)
         {
             _world.SetBlock(x, y, z, blockType);
-            _worldChanged = true;
+
+            // Mark the chunk containing this block as dirty
+            var chunkPos = Chunk.WorldToChunkPosition(x, y, z);
+            _dirtyChunks.Add(chunkPos);
+
+            // Also mark adjacent chunks if the block is on a chunk boundary
+            // (for proper face culling at chunk edges)
+            if (x % Chunk.ChunkSize == 0)
+                _dirtyChunks.Add(new Vector3i(chunkPos.X - 1, chunkPos.Y, chunkPos.Z));
+            if (x % Chunk.ChunkSize == Chunk.ChunkSize - 1)
+                _dirtyChunks.Add(new Vector3i(chunkPos.X + 1, chunkPos.Y, chunkPos.Z));
+
+            if (y % Chunk.ChunkSize == 0)
+                _dirtyChunks.Add(new Vector3i(chunkPos.X, chunkPos.Y - 1, chunkPos.Z));
+            if (y % Chunk.ChunkSize == Chunk.ChunkSize - 1)
+                _dirtyChunks.Add(new Vector3i(chunkPos.X, chunkPos.Y + 1, chunkPos.Z));
+
+            if (z % Chunk.ChunkSize == 0)
+                _dirtyChunks.Add(new Vector3i(chunkPos.X, chunkPos.Y, chunkPos.Z - 1));
+            if (z % Chunk.ChunkSize == Chunk.ChunkSize - 1)
+                _dirtyChunks.Add(new Vector3i(chunkPos.X, chunkPos.Y, chunkPos.Z + 1));
         }
     }
 
@@ -48,23 +73,27 @@ public class GameEngine
     /// </summary>
     public void Update(double deltaTime)
     {
-        // If world changed, regenerate chunk meshes
-        if (_worldChanged && _world != null)
+        // If there are dirty chunks, regenerate only those chunk meshes
+        if (_dirtyChunks.Count > 0 && _world != null)
         {
-            RegenerateChunkMeshes();
-            _worldChanged = false;
+            RegenerateDirtyChunkMeshes();
+            _dirtyChunks.Clear();
         }
     }
 
-    private void RegenerateChunkMeshes()
+    private void RegenerateDirtyChunkMeshes()
     {
         if (_world == null) return;
 
-        // Build and send meshes for each chunk
-        foreach (var chunk in _world.GetAllChunks())
+        // Build and send meshes only for dirty chunks
+        foreach (var chunkPos in _dirtyChunks)
         {
-            var meshData = ChunkMeshBuilder.BuildChunkMesh(chunk, _world);
-            _renderer.UpdateChunk(chunk.ChunkPosition, meshData);
+            var chunk = _world.GetChunk(chunkPos);
+            if (chunk != null)
+            {
+                var meshData = ChunkMeshBuilder.BuildChunkMesh(chunk, _world);
+                _renderer.UpdateChunk(chunk.ChunkPosition, meshData);
+            }
         }
     }
 }
