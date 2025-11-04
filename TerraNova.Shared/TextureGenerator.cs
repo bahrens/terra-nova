@@ -1,6 +1,4 @@
-using TerraNova.Shared;
-
-namespace TerraNova;
+namespace TerraNova.Shared;
 
 /// <summary>
 /// Procedurally generates textures for block types

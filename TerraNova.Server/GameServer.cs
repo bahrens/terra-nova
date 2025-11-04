@@ -17,6 +17,7 @@ public class GameServer : IGameServer, INetEventListener
     private readonly ServerSettings _serverSettings;
     private readonly WorldSettings _worldSettings;
     private readonly ILogger<GameServer> _logger;
+    private WebSocketServer? _webSocketServer;
 
     public GameServer(IOptions<ServerSettings> serverSettings, IOptions<WorldSettings> worldSettings, ILogger<GameServer> logger)
     {
@@ -94,6 +95,23 @@ public class GameServer : IGameServer, INetEventListener
             blocksGenerated);
     }
 
+    // Public methods for WebSocket server
+    public (Vector3i position, BlockType blockType)[] GetAllBlocks()
+    {
+        return _world.GetAllBlocks().ToArray();
+    }
+
+    public void SetBlock(int x, int y, int z, BlockType blockType)
+    {
+        _world.SetBlock(x, y, z, blockType);
+    }
+
+    public void SetWebSocketServer(WebSocketServer webSocketServer)
+    {
+        _webSocketServer = webSocketServer;
+        _logger.LogInformation("WebSocketServer reference set for cross-client broadcasting");
+    }
+
     public void Start()
     {
         _netManager.Start(_serverSettings.Port);
@@ -142,10 +160,17 @@ public class GameServer : IGameServer, INetEventListener
                 var blockUpdate = reader.GetBlockUpdateMessage();
                 _world.SetBlock(blockUpdate.X, blockUpdate.Y, blockUpdate.Z, blockUpdate.NewType);
 
-                // Broadcast to all clients
+                // Broadcast to all LiteNetLib clients
                 BroadcastBlockUpdate(blockUpdate);
 
-                _logger.LogInformation("Block updated at ({X},{Y},{Z}) to {BlockType}",
+                // Also broadcast to WebSocket clients
+                if (_webSocketServer != null)
+                {
+                    _ = _webSocketServer.BroadcastBlockUpdateToWebSocketClients(
+                        blockUpdate.X, blockUpdate.Y, blockUpdate.Z, blockUpdate.NewType);
+                }
+
+                _logger.LogInformation("Block updated at ({X},{Y},{Z}) to {BlockType} (broadcasted to all clients)",
                     blockUpdate.X, blockUpdate.Y, blockUpdate.Z, blockUpdate.NewType);
                 break;
         }
@@ -200,5 +225,14 @@ public class GameServer : IGameServer, INetEventListener
 
         // Send to all connected peers
         _netManager.SendToAll(writer, DeliveryMethod.ReliableOrdered);
+    }
+
+    /// <summary>
+    /// Public method for WebSocketServer to broadcast block updates to LiteNetLib clients
+    /// </summary>
+    public void BroadcastBlockUpdateToLiteNetLibClients(int x, int y, int z, BlockType blockType)
+    {
+        var blockUpdate = new BlockUpdateMessage(x, y, z, blockType);
+        BroadcastBlockUpdate(blockUpdate);
     }
 }

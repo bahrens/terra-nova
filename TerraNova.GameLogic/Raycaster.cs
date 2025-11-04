@@ -1,10 +1,10 @@
-using OpenTK.Mathematics;
 using TerraNova.Shared;
 
-namespace TerraNova;
+namespace TerraNova.GameLogic;
 
 /// <summary>
-/// Performs raycasting to detect which block the player is looking at
+/// Platform-agnostic raycaster for detecting which block the player is looking at.
+/// Uses shared Vector3 instead of OpenTK-specific types.
 /// </summary>
 public static class Raycaster
 {
@@ -47,7 +47,7 @@ public static class Raycaster
                     closestDistance = hit.Value.Distance;
                     closestHit = new RaycastHit
                     {
-                        BlockPosition = new TerraNova.Shared.Vector3i(x, y, z),
+                        BlockPosition = new Vector3i(x, y, z),
                         BlockType = blockType,
                         HitFace = hit.Value.Face,
                         Distance = hit.Value.Distance
@@ -146,28 +146,4 @@ public static class Raycaster
 
         return (tMin, hitFace);
     }
-}
-
-/// <summary>
-/// Information about a raycast hit
-/// </summary>
-public class RaycastHit
-{
-    public TerraNova.Shared.Vector3i BlockPosition { get; set; }
-    public BlockType BlockType { get; set; }
-    public BlockFace HitFace { get; set; }
-    public float Distance { get; set; }
-}
-
-/// <summary>
-/// Represents the face of a block that was hit
-/// </summary>
-public enum BlockFace
-{
-    Front,
-    Back,
-    Left,
-    Right,
-    Top,
-    Bottom
 }

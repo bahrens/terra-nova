@@ -1,6 +1,7 @@
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using TerraNova.Shared;
+using OpenTKVector3 = OpenTK.Mathematics.Vector3;
 
 namespace TerraNova;
 
@@ -46,7 +47,7 @@ public class ChunkMesh : IDisposable
 
                     // Get world position for this block
                     TerraNova.Shared.Vector3i worldPos = Chunk.GetWorldPosition(x, y, z);
-                    Vector3 pos = new Vector3(worldPos.X, worldPos.Y, worldPos.Z);
+                    OpenTKVector3 pos = new OpenTKVector3(worldPos.X, worldPos.Y, worldPos.Z);
 
                     // Get block color
                     var color = BlockHelper.GetBlockColor(blockType);
@@ -111,7 +112,7 @@ public class ChunkMesh : IDisposable
     /// <summary>
     /// Adds all visible faces of a single block to the mesh
     /// </summary>
-    private void AddBlockFaces(Vector3 pos, float r, float g, float b, BlockFaces visibleFaces,
+    private void AddBlockFaces(OpenTKVector3 pos, float r, float g, float b, BlockFaces visibleFaces,
                                List<float> vertexList, List<uint> indexList, ref uint vertexCount)
     {
         // Helper to add a face's vertices and indices

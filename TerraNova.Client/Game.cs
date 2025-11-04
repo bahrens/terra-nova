@@ -6,7 +6,9 @@ using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using TerraNova.Configuration;
+using TerraNova.GameLogic;
 using TerraNova.Shared;
+using OpenTKVector3 = OpenTK.Mathematics.Vector3;
 
 namespace TerraNova;
 
@@ -74,7 +76,7 @@ public class Game : GameWindow
         GL.CullFace(TriangleFace.Back);
 
         // Initialize camera with configured settings (start above and outside the world)
-        _camera = new Camera(new Vector3(0.0f, 25.0f, 50.0f))
+        _camera = new Camera(new OpenTKVector3(0.0f, 25.0f, 50.0f))
         {
             Speed = _cameraSettings.MovementSpeed,
             Sensitivity = _cameraSettings.MouseSensitivity,
@@ -99,7 +101,7 @@ public class Game : GameWindow
 
         // Initialize UI overlays
         _crosshair = new Crosshair();
-        _crosshair.Initialize();
+        _crosshair.Initialize(ClientSize.X, ClientSize.Y);
 
         // Connect to server using configured settings
         _networkClient.Connect(_networkSettings.ServerHost, _networkSettings.ServerPort, _networkSettings.PlayerName);
@@ -208,7 +210,7 @@ public class Game : GameWindow
         // Left click - break block
         if (MouseState.IsButtonPressed(MouseButton.Left))
         {
-            var hit = Raycaster.Cast(_networkClient.World!, _camera.Position, _camera.Front);
+            var hit = Raycaster.Cast(_networkClient.World!, _camera.Position.ToShared(), _camera.Front.ToShared());
             if (hit != null)
             {
                 _logger.LogInformation("Breaking block at ({X},{Y},{Z})",
@@ -226,7 +228,7 @@ public class Game : GameWindow
         // Right click - place block
         if (MouseState.IsButtonPressed(MouseButton.Right))
         {
-            var hit = Raycaster.Cast(_networkClient.World!, _camera.Position, _camera.Front);
+            var hit = Raycaster.Cast(_networkClient.World!, _camera.Position.ToShared(), _camera.Front.ToShared());
             if (hit != null)
             {
                 // Calculate position to place the block (adjacent to hit face)
@@ -276,7 +278,7 @@ public class Game : GameWindow
         TerraNova.Shared.Vector3i? selectedBlockPos = null;
         if (_networkClient.WorldReceived && _networkClient.World != null)
         {
-            var hit = Raycaster.Cast(_networkClient.World, _camera.Position, _camera.Front);
+            var hit = Raycaster.Cast(_networkClient.World, _camera.Position.ToShared(), _camera.Front.ToShared());
             if (hit != null)
             {
                 selectedBlockPos = hit.BlockPosition;
@@ -313,7 +315,7 @@ public class Game : GameWindow
 
                 // Create a temporary mesh for the selected block with bordered shader
                 using var selectedBlockMesh = new CubeMesh(
-                    new Vector3(selectedBlockPos.Value.X, selectedBlockPos.Value.Y, selectedBlockPos.Value.Z),
+                    new OpenTKVector3(selectedBlockPos.Value.X, selectedBlockPos.Value.Y, selectedBlockPos.Value.Z),
                     selectedBlockType,
                     visibleFaces);
 
@@ -352,6 +354,9 @@ public class Game : GameWindow
 
         // Update the OpenGL viewport to match the new window size
         GL.Viewport(0, 0, args.Width, args.Height);
+
+        // Update crosshair for new window dimensions
+        _crosshair?.OnResize(args.Width, args.Height);
     }
 
     /// <summary>

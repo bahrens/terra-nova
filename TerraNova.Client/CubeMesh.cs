@@ -1,6 +1,7 @@
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using TerraNova.Shared;
+using OpenTKVector3 = OpenTK.Mathematics.Vector3;
 
 namespace TerraNova;
 
@@ -15,9 +16,9 @@ public class CubeMesh : IDisposable
     private int _indexCount;
     private bool _disposed = false;
 
-    public Vector3 Position { get; private set; }
+    public OpenTKVector3 Position { get; private set; }
 
-    public CubeMesh(Vector3 position, BlockType blockType, BlockFaces visibleFaces = BlockFaces.All)
+    public CubeMesh(OpenTKVector3 position, BlockType blockType, BlockFaces visibleFaces = BlockFaces.All)
     {
         Position = position;
         GenerateCube(position, blockType, visibleFaces);
@@ -26,7 +27,7 @@ public class CubeMesh : IDisposable
     /// <summary>
     /// Generates vertex data for a cube at the given position, only including visible faces
     /// </summary>
-    private void GenerateCube(Vector3 pos, BlockType blockType, BlockFaces visibleFaces)
+    private void GenerateCube(OpenTKVector3 pos, BlockType blockType, BlockFaces visibleFaces)
     {
         var color = BlockHelper.GetBlockColor(blockType);
         float r = color.r, g = color.g, b = color.b;
