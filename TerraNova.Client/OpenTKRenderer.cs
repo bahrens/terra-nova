@@ -64,12 +64,31 @@ public class OpenTKRenderer : IRenderer, IDisposable
             _chunkMeshes.Remove(chunkPos);
         }
 
-        // Create chunk object
+        // Create chunk object and fill it with blocks from the world
         var chunk = new Chunk(chunkPos);
 
-        // Fill chunk with blocks from mesh data (we need this for ChunkMesh construction)
-        // Note: This is a simplification - in a real implementation we'd pass mesh data directly
-        // For now, we'll reconstruct the chunk from the world
+        // Populate the chunk with blocks from the world
+        int chunkWorldX = chunkPos.X * Chunk.ChunkSize;
+        int chunkWorldY = chunkPos.Y * Chunk.ChunkSize;
+        int chunkWorldZ = chunkPos.Z * Chunk.ChunkSize;
+
+        for (int x = 0; x < Chunk.ChunkSize; x++)
+        {
+            for (int y = 0; y < Chunk.ChunkSize; y++)
+            {
+                for (int z = 0; z < Chunk.ChunkSize; z++)
+                {
+                    int worldX = chunkWorldX + x;
+                    int worldY = chunkWorldY + y;
+                    int worldZ = chunkWorldZ + z;
+
+                    BlockType blockType = _world.GetBlock(worldX, worldY, worldZ);
+                    chunk.SetBlock(x, y, z, blockType);
+                }
+            }
+        }
+
+        // Create the mesh from the populated chunk
         var chunkMesh = new ChunkMesh(chunk, _world);
         _chunkMeshes[chunkPos] = chunkMesh;
 
