@@ -21,6 +21,7 @@
 @code {
     private string statusMessage = "Initializing...";
     private World? world = null; // Store world reference for block updates
+    private GameEngine? gameEngine = null; // GameEngine manages world state and rendering
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -139,8 +140,9 @@
 
             if (chunks != null && chunks.Count > 0)
             {
-                await JS.InvokeVoidAsync("console.log", "Creating world...");
+                await JS.InvokeVoidAsync("console.log", "Creating world and GameEngine...");
                 world = new World();
+                gameEngine = new GameEngine(Renderer);
 
                 // Add all blocks to the world
                 await JS.InvokeVoidAsync("console.log", "Adding blocks to world...");
@@ -155,44 +157,16 @@
                     }
                 }
 
-                await JS.InvokeVoidAsync("console.log", "Building chunk meshes...");
-                // Build and send meshes for each chunk
-                var renderTasks = new List<Task>();
-                foreach (var chunkData in chunks.Values)
-                {
-                    var chunkPos = new Vector3i(chunkData.ChunkX, chunkData.ChunkY, chunkData.ChunkZ);
-                    var chunk = new Chunk(chunkPos);
+                // Initialize GameEngine with the populated world
+                await JS.InvokeVoidAsync("console.log", "Initializing GameEngine with world...");
+                gameEngine.SetWorld(world);
 
-                    // Fill chunk with blocks
-                    int blocksAdded = 0;
-                    foreach (var block in chunkData.Blocks)
-                    {
-                        int localX = block.X - (chunkData.ChunkX * Chunk.ChunkSize);
-                        int localY = block.Y - (chunkData.ChunkY * Chunk.ChunkSize);
-                        int localZ = block.Z - (chunkData.ChunkZ * Chunk.ChunkSize);
+                // GameEngine.Update will regenerate all chunk meshes
+                await JS.InvokeVoidAsync("console.log", "Updating GameEngine to generate meshes...");
+                gameEngine.Update(0); // Delta time doesn't matter for initial mesh generation
 
-                        if (localX >= 0 && localX < Chunk.ChunkSize &&
-                            localY >= 0 && localY < Chunk.ChunkSize &&
-                            localZ >= 0 && localZ < Chunk.ChunkSize)
-                        {
-                            chunk.SetBlock(localX, localY, localZ, (BlockType)block.Type);
-                            blocksAdded++;
-                        }
-                    }
-
-                    // Build and render mesh
-                    await JS.InvokeVoidAsync("console.log", $"Chunk ({chunkData.ChunkX}, {chunkData.ChunkY}, {chunkData.ChunkZ}) has {blocksAdded} blocks from {chunkData.Blocks.Count} received");
-                    var meshData = ChunkMeshBuilder.BuildChunkMesh(chunk, world);
-                    await JS.InvokeVoidAsync("console.log", $"Built mesh for chunk ({chunkData.ChunkX}, {chunkData.ChunkY}, {chunkData.ChunkZ}): {meshData.Vertices.Length} vertices, {meshData.Indices.Length} indices");
-                    renderTasks.Add(Renderer.UpdateChunk(chunkPos, meshData));
-                }
-
-                await JS.InvokeVoidAsync("console.log", $"Awaiting {renderTasks.Count} render tasks...");
-                // Wait for all chunks to be rendered
-                await Task.WhenAll(renderTasks);
-
-                await JS.InvokeVoidAsync("console.log", "All chunks rendered!");
-                statusMessage = $"World loaded! ({renderTasks.Count} chunks)";
+                await JS.InvokeVoidAsync("console.log", "All chunks rendered by GameEngine!");
+                statusMessage = $"World loaded! ({chunks.Count} chunks)";
                 StateHasChanged();
             }
         }
@@ -204,7 +178,7 @@
     }
 
     /// <summary>
-    /// Handle block updates from the server and rebuild affected chunks
+    /// Handle block updates from the server and let GameEngine rebuild affected chunks
     /// </summary>
     [Microsoft.JSInterop.JSInvokable]
     public async Task HandleBlockUpdate(int x, int y, int z, int blockType)
@@ -213,48 +187,19 @@
         {
             await JS.InvokeVoidAsync("console.log", $"HandleBlockUpdate called: ({x}, {y}, {z}) = {blockType}");
 
-            if (world == null)
+            if (world == null || gameEngine == null)
             {
-                await JS.InvokeVoidAsync("console.warn", "World not initialized yet, skipping block update");
+                await JS.InvokeVoidAsync("console.warn", "World or GameEngine not initialized yet, skipping block update");
                 return;
             }
 
-            // Update world data
-            world.SetBlock(x, y, z, (BlockType)blockType);
+            // Update world data via GameEngine
+            gameEngine.NotifyBlockUpdate(x, y, z, (BlockType)blockType);
 
-            // Calculate chunk position
-            int chunkX = (int)Math.Floor(x / 16.0);
-            int chunkY = (int)Math.Floor(y / 16.0);
-            int chunkZ = (int)Math.Floor(z / 16.0);
-            var chunkPos = new Vector3i(chunkX, chunkY, chunkZ);
+            // GameEngine.Update will regenerate affected chunk meshes
+            gameEngine.Update(0); // Delta time doesn't matter for mesh regeneration
 
-            await JS.InvokeVoidAsync("console.log", $"Rebuilding chunk ({chunkX}, {chunkY}, {chunkZ}) for block update");
-
-            // Create and populate the chunk
-            var chunk = new Chunk(chunkPos);
-
-            // Fill chunk with blocks from world
-            for (int lx = 0; lx < Chunk.ChunkSize; lx++)
-            {
-                for (int ly = 0; ly < Chunk.ChunkSize; ly++)
-                {
-                    for (int lz = 0; lz < Chunk.ChunkSize; lz++)
-                    {
-                        int worldX = chunkX * Chunk.ChunkSize + lx;
-                        int worldY = chunkY * Chunk.ChunkSize + ly;
-                        int worldZ = chunkZ * Chunk.ChunkSize + lz;
-
-                        var existingBlockType = world.GetBlock(worldX, worldY, worldZ);
-                        chunk.SetBlock(lx, ly, lz, existingBlockType);
-                    }
-                }
-            }
-
-            // Build and render mesh
-            var meshData = ChunkMeshBuilder.BuildChunkMesh(chunk, world);
-            await Renderer.UpdateChunk(chunkPos, meshData);
-
-            await JS.InvokeVoidAsync("console.log", $"Chunk ({chunkX}, {chunkY}, {chunkZ}) rebuilt with {meshData.Vertices.Length / 3} vertices");
+            await JS.InvokeVoidAsync("console.log", $"Block update at ({x}, {y}, {z}) processed by GameEngine");
         }
         catch (Exception ex)
         {
