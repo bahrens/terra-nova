@@ -21,16 +21,16 @@ public class Game : GameWindow
     private bool _firstMove = true;
     private Vector2 _lastMousePos;
 
-    private Shader _shader = null!;
-    private Shader _borderedShader = null!;
     private readonly INetworkClient _networkClient;
     private readonly NetworkSettings _networkSettings;
     private readonly CameraSettings _cameraSettings;
     private readonly ILogger<Game> _logger;
-    private List<ChunkMesh> _chunkMeshes = new();
-    private Texture _grassTexture = null!;
-    private bool _meshesGenerated = false;
     private Crosshair _crosshair = null!;
+
+    // New architecture: GameEngine + OpenTKRenderer
+    private World _world = null!;
+    private OpenTKRenderer _renderer = null!;
+    private GameEngine _gameEngine = null!;
 
     // FPS tracking
     private double _fpsUpdateTimer = 0.0;
@@ -86,18 +86,8 @@ public class Game : GameWindow
         // Capture and hide the mouse cursor for FPS controls
         CursorState = CursorState.Grabbed;
 
-        // Load shaders
-        string vertexShaderSource = File.ReadAllText("Shaders/basic.vert");
-        string fragmentShaderSource = File.ReadAllText("Shaders/basic.frag");
-        _shader = new Shader(vertexShaderSource, fragmentShaderSource);
-
-        // Load bordered shader for selected blocks
-        string borderedFragmentShaderSource = File.ReadAllText("Shaders/bordered.frag");
-        _borderedShader = new Shader(vertexShaderSource, borderedFragmentShaderSource);
-
-        // Generate grayscale noisy texture (multiplied with vertex colors for variation)
-        byte[] noisePixels = TextureGenerator.GenerateGrayscaleNoiseTexture(16);
-        _grassTexture = new Texture(16, 16, noisePixels);
+        // Note: GameEngine and Renderer will be created in OnUpdateFrame
+        // after receiving world data from the network client
 
         // Initialize UI overlays
         _crosshair = new Crosshair();
@@ -162,47 +152,36 @@ public class Game : GameWindow
         // Poll network events
         _networkClient.Update();
 
-        // Generate meshes once world data is received
-        if (_networkClient.WorldReceived && !_meshesGenerated && _networkClient.World != null)
+        // Initialize GameEngine and Renderer once world data is received
+        if (_networkClient.WorldReceived && _gameEngine == null && _networkClient.World != null)
         {
-            GenerateMeshesFromWorld(_networkClient.World);
-            _meshesGenerated = true;
+            _logger.LogInformation("World received! Initializing GameEngine and Renderer...");
+            _world = _networkClient.World;
+            _renderer = new OpenTKRenderer(_world);
+            _renderer.Initialize();
+            _renderer.SetCameraReference(_camera);
+            _gameEngine = new GameEngine(_renderer);
+            _gameEngine.SetWorld(_world);
         }
 
         // Handle block interaction if world is loaded
-        if (_networkClient.WorldReceived && _networkClient.World != null)
+        if (_networkClient.WorldReceived && _networkClient.World != null && _gameEngine != null)
         {
             HandleBlockInteraction();
 
-            // Regenerate meshes if world changed
+            // Notify GameEngine if world changed
             if (_networkClient.WorldChanged)
             {
-                GenerateMeshesFromWorld(_networkClient.World);
+                _gameEngine.SetWorld(_networkClient.World);
                 _networkClient.WorldChanged = false;
             }
         }
-    }
 
-    private void GenerateMeshesFromWorld(World world)
-    {
-        _logger.LogInformation("Generating chunk meshes from server world data...");
-
-        // Clear any existing meshes
-        foreach (var mesh in _chunkMeshes)
+        // Update GameEngine (regenerates meshes if needed)
+        if (_gameEngine != null)
         {
-            mesh.Dispose();
+            _gameEngine.Update(deltaTime);
         }
-        _chunkMeshes.Clear();
-
-        // Generate one mesh per chunk (huge performance improvement!)
-        foreach (var chunk in world.GetAllChunks())
-        {
-            var chunkMesh = new ChunkMesh(chunk, world);
-            _chunkMeshes.Add(chunkMesh);
-        }
-
-        _logger.LogInformation("Generated {Count} chunk meshes (was {BlockCount} individual block meshes before optimization)",
-            _chunkMeshes.Count, world.GetAllBlocks().Count());
     }
 
     private void HandleBlockInteraction()
@@ -268,13 +247,7 @@ public class Game : GameWindow
         // Clear the screen and depth buffer
         GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
-        // Set view and projection matrices (same for all blocks)
-        Matrix4 view = _camera.GetViewMatrix();
-        float aspectRatio = (float)ClientSize.X / ClientSize.Y;
-        Matrix4 projection = _camera.GetProjectionMatrix(aspectRatio);
-        Matrix4 model = Matrix4.Identity; // Blocks are already positioned, so model is identity
-
-        // Find which block is selected (if any)
+        // Find which block is selected (if any) for highlighting
         TerraNova.Shared.Vector3i? selectedBlockPos = null;
         if (_networkClient.WorldReceived && _networkClient.World != null)
         {
@@ -285,59 +258,25 @@ public class Game : GameWindow
             }
         }
 
-        // Draw all chunks with normal shader
-        _shader.Use();
-        _grassTexture.Bind(0);
-        _shader.SetInt("blockTexture", 0);
-        _shader.SetMatrix4("view", view);
-        _shader.SetMatrix4("projection", projection);
-        _shader.SetMatrix4("model", model);
-
-        foreach (var chunkMesh in _chunkMeshes)
+        // Tell renderer which block to highlight
+        if (_renderer != null)
         {
-            chunkMesh.Draw();
-        }
-
-        // If a block is selected, draw it again with the bordered shader for highlighting
-        if (selectedBlockPos.HasValue && _networkClient.World != null)
-        {
-            BlockType selectedBlockType = _networkClient.World.GetBlock(
-                selectedBlockPos.Value.X,
-                selectedBlockPos.Value.Y,
-                selectedBlockPos.Value.Z);
-
-            if (selectedBlockType != BlockType.Air)
+            if (selectedBlockPos.HasValue)
             {
-                BlockFaces visibleFaces = _networkClient.World.GetVisibleFaces(
-                    selectedBlockPos.Value.X,
-                    selectedBlockPos.Value.Y,
-                    selectedBlockPos.Value.Z);
-
-                // Create a temporary mesh for the selected block with bordered shader
-                using var selectedBlockMesh = new CubeMesh(
-                    new OpenTKVector3(selectedBlockPos.Value.X, selectedBlockPos.Value.Y, selectedBlockPos.Value.Z),
-                    selectedBlockType,
-                    visibleFaces);
-
-                // Enable polygon offset to prevent z-fighting with the chunk mesh
-                GL.Enable(EnableCap.PolygonOffsetFill);
-                GL.PolygonOffset(-1.0f, -1.0f); // Negative values pull towards camera
-
-                _borderedShader.Use();
-                _grassTexture.Bind(0);
-                _borderedShader.SetInt("blockTexture", 0);
-                _borderedShader.SetMatrix4("view", view);
-                _borderedShader.SetMatrix4("projection", projection);
-                _borderedShader.SetMatrix4("model", model);
-
-                selectedBlockMesh.Draw();
-
-                // Disable polygon offset after drawing
-                GL.Disable(EnableCap.PolygonOffsetFill);
+                _renderer.HighlightBlock(selectedBlockPos.Value, true);
             }
+            else
+            {
+                // Clear highlight if no block selected
+                _renderer.HighlightBlock(new TerraNova.Shared.Vector3i(0, 0, 0), false);
+            }
+
+            // Render the world (chunks + highlighted block)
+            _renderer.Render(ClientSize.X, ClientSize.Y);
         }
 
         // Draw crosshair on top of everything
+        float aspectRatio = (float)ClientSize.X / ClientSize.Y;
         _crosshair.Draw(aspectRatio);
 
         // Swap the front and back buffers (double buffering)
@@ -391,18 +330,8 @@ public class Game : GameWindow
 
         // Clean up resources
         _networkClient?.Disconnect();
-        _shader?.Dispose();
-        _borderedShader?.Dispose();
-        _grassTexture?.Dispose();
+        _renderer?.Dispose();
         _crosshair?.Dispose();
-
-        if (_chunkMeshes != null)
-        {
-            foreach (var mesh in _chunkMeshes)
-            {
-                mesh.Dispose();
-            }
-        }
 
         _logger.LogInformation("Terra Nova shutting down...");
     }
