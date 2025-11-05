@@ -258,17 +258,16 @@ window.terraNovaRenderer = (function() {
     }
 
     /**
-     * Update or create a chunk mesh
+     * Update or create a chunk mesh (2D column chunk)
      * @param {number} chunkX - Chunk X position
-     * @param {number} chunkY - Chunk Y position
      * @param {number} chunkZ - Chunk Z position
      * @param {Float32Array} vertices - Vertex positions (xyz)
      * @param {Float32Array} colors - Vertex colors (rgb)
      * @param {Float32Array} texCoords - Texture coordinates (uv)
      * @param {Uint32Array} indices - Triangle indices
      */
-    function updateChunk(chunkX, chunkY, chunkZ, vertices, colors, texCoords, indices) {
-        const chunkKey = `${chunkX},${chunkY},${chunkZ}`;
+    function updateChunk(chunkX, chunkZ, vertices, colors, texCoords, indices) {
+        const chunkKey = `${chunkX},${chunkZ}`;
 
         // Remove existing mesh if any
         if (chunkMeshes.has(chunkKey)) {
@@ -317,17 +316,16 @@ window.terraNovaRenderer = (function() {
             window.terraNovaBlockInteraction.registerChunk(chunkKey, mesh);
         }
 
-        console.log(`Updated chunk (${chunkX}, ${chunkY}, ${chunkZ}) with ${indices.length / 3} triangles (vertices already in world space)`);
+        console.log(`Updated chunk column (${chunkX}, ${chunkZ}) with ${indices.length / 3} triangles (vertices already in world space)`);
     }
 
     /**
-     * Remove a chunk mesh
+     * Remove a chunk mesh (2D column chunk)
      * @param {number} chunkX - Chunk X position
-     * @param {number} chunkY - Chunk Y position
      * @param {number} chunkZ - Chunk Z position
      */
-    function removeChunk(chunkX, chunkY, chunkZ) {
-        const chunkKey = `${chunkX},${chunkY},${chunkZ}`;
+    function removeChunk(chunkX, chunkZ) {
+        const chunkKey = `${chunkX},${chunkZ}`;
 
         if (chunkMeshes.has(chunkKey)) {
             const mesh = chunkMeshes.get(chunkKey);
@@ -341,7 +339,7 @@ window.terraNovaRenderer = (function() {
                 window.terraNovaBlockInteraction.unregisterChunk(chunkKey);
             }
 
-            console.log(`Removed chunk (${chunkX}, ${chunkY}, ${chunkZ})`);
+            console.log(`Removed chunk column (${chunkX}, ${chunkZ})`);
         }
     }
 

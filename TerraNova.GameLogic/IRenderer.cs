@@ -9,14 +9,14 @@ namespace TerraNova.GameLogic;
 public interface IRenderer
 {
     /// <summary>
-    /// Update or create a chunk mesh at the specified position
+    /// Update or create a chunk mesh at the specified 2D position (X, Z only)
     /// </summary>
-    Task UpdateChunk(Vector3i chunkPos, ChunkMeshData meshData);
+    Task UpdateChunk(Vector2i chunkPos, ChunkMeshData meshData);
 
     /// <summary>
-    /// Remove a chunk mesh from the scene
+    /// Remove a chunk mesh from the scene at the specified 2D position (X, Z only)
     /// </summary>
-    void RemoveChunk(Vector3i chunkPos);
+    void RemoveChunk(Vector2i chunkPos);
 
     /// <summary>
     /// Update the camera position and rotation

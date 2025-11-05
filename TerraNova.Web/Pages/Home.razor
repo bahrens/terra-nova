@@ -63,18 +63,16 @@
                     (blocks) => {
                         console.log('Received world data from server:', blocks.length, 'blocks');
 
-                        // Group blocks by chunk
+                        // Group blocks by chunk column (2D: X, Z only)
                         const chunks = {};
                         blocks.forEach(block => {
                             const chunkX = Math.floor(block.x / 16);
-                            const chunkY = Math.floor(block.y / 16);
                             const chunkZ = Math.floor(block.z / 16);
-                            const chunkKey = `${chunkX},${chunkY},${chunkZ}`;
+                            const chunkKey = `${chunkX},${chunkZ}`;
 
                             if (!chunks[chunkKey]) {
                                 chunks[chunkKey] = {
                                     chunkX: chunkX,
-                                    chunkY: chunkY,
                                     chunkZ: chunkZ,
                                     blocks: []
                                 };
@@ -211,15 +209,12 @@
     /// <summary>
     /// Helper class for JSON deserialization of chunk data received from JavaScript.
     /// This mirrors the chunk structure created in the JavaScript network client
-    /// when grouping blocks by chunk position.
+    /// when grouping blocks by chunk column position (2D: X, Z only).
     /// </summary>
     private class ChunkData
     {
         [System.Text.Json.Serialization.JsonPropertyName("chunkX")]
         public int ChunkX { get; set; }
-
-        [System.Text.Json.Serialization.JsonPropertyName("chunkY")]
-        public int ChunkY { get; set; }
 
         [System.Text.Json.Serialization.JsonPropertyName("chunkZ")]
         public int ChunkZ { get; set; }

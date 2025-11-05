@@ -18,16 +18,16 @@ public class ThreeJsRenderer : IRenderer
     }
 
     /// <summary>
-    /// Update or create a chunk mesh in the Three.js scene
+    /// Update or create a chunk mesh in the Three.js scene (2D column chunk)
     /// </summary>
-    public async Task UpdateChunk(Vector3i chunkPos, ChunkMeshData meshData)
+    public async Task UpdateChunk(Vector2i chunkPos, ChunkMeshData meshData)
     {
         try
         {
-            // Call JavaScript function to update the chunk
+            // Call JavaScript function to update the chunk column (X, Z only)
             await _jsRuntime.InvokeVoidAsync(
                 "terraNovaRenderer.updateChunk",
-                chunkPos.X, chunkPos.Y, chunkPos.Z,
+                chunkPos.X, chunkPos.Z,
                 meshData.Vertices,
                 meshData.Colors,
                 meshData.TexCoords,
@@ -41,15 +41,15 @@ public class ThreeJsRenderer : IRenderer
     }
 
     /// <summary>
-    /// Remove a chunk mesh from the Three.js scene
+    /// Remove a chunk mesh from the Three.js scene (2D column chunk)
     /// </summary>
-    public async void RemoveChunk(Vector3i chunkPos)
+    public async void RemoveChunk(Vector2i chunkPos)
     {
         try
         {
             await _jsRuntime.InvokeVoidAsync(
                 "terraNovaRenderer.removeChunk",
-                chunkPos.X, chunkPos.Y, chunkPos.Z
+                chunkPos.X, chunkPos.Z
             );
         }
         catch (Exception ex)

@@ -5,17 +5,18 @@ using TerraNova.Shared;
 using OpenTKVector3 = OpenTK.Mathematics.Vector3;
 using SharedVector3 = TerraNova.Shared.Vector3;
 using SharedVector3i = TerraNova.Shared.Vector3i;
+using SharedVector2i = TerraNova.Shared.Vector2i;
 
 namespace TerraNova;
 
 /// <summary>
 /// OpenTK-based renderer implementation for desktop client.
-/// Manages OpenGL resources and chunk mesh rendering.
+/// Manages OpenGL resources and chunk mesh rendering (2D column chunks).
 /// </summary>
 public class OpenTKRenderer : IRenderer, IDisposable
 {
-    private readonly Dictionary<SharedVector3i, ChunkMeshData> _chunkMeshDataCache = new();
-    private readonly Dictionary<SharedVector3i, ChunkMesh> _chunkMeshes = new();
+    private readonly Dictionary<SharedVector2i, ChunkMeshData> _chunkMeshDataCache = new();
+    private readonly Dictionary<SharedVector2i, ChunkMesh> _chunkMeshes = new();
     private readonly World _world;
     private Camera? _camera;
     private OpenTKVector3 _cameraRotation;
@@ -50,9 +51,9 @@ public class OpenTKRenderer : IRenderer, IDisposable
     }
 
     /// <summary>
-    /// Update or create a chunk mesh at the specified position
+    /// Update or create a chunk mesh at the specified 2D position (X, Z only)
     /// </summary>
-    public Task UpdateChunk(SharedVector3i chunkPos, ChunkMeshData meshData)
+    public Task UpdateChunk(SharedVector2i chunkPos, ChunkMeshData meshData)
     {
         // Cache the mesh data
         _chunkMeshDataCache[chunkPos] = meshData;
@@ -64,22 +65,22 @@ public class OpenTKRenderer : IRenderer, IDisposable
             _chunkMeshes.Remove(chunkPos);
         }
 
-        // Create chunk object and fill it with blocks from the world
+        // Create chunk column object and fill it with blocks from the world
         var chunk = new Chunk(chunkPos);
 
-        // Populate the chunk with blocks from the world
+        // Populate the chunk column with blocks from the world
+        // Chunks are now columns that span the full world height
         int chunkWorldX = chunkPos.X * Chunk.ChunkSize;
-        int chunkWorldY = chunkPos.Y * Chunk.ChunkSize;
         int chunkWorldZ = chunkPos.Z * Chunk.ChunkSize;
 
         for (int x = 0; x < Chunk.ChunkSize; x++)
         {
-            for (int y = 0; y < Chunk.ChunkSize; y++)
+            for (int y = 0; y < Chunk.WorldHeight; y++)  // Full world height
             {
                 for (int z = 0; z < Chunk.ChunkSize; z++)
                 {
                     int worldX = chunkWorldX + x;
-                    int worldY = chunkWorldY + y;
+                    int worldY = y;  // Y is absolute in column chunks
                     int worldZ = chunkWorldZ + z;
 
                     BlockType blockType = _world.GetBlock(worldX, worldY, worldZ);
@@ -96,9 +97,9 @@ public class OpenTKRenderer : IRenderer, IDisposable
     }
 
     /// <summary>
-    /// Remove a chunk mesh at the specified position
+    /// Remove a chunk mesh at the specified 2D position (X, Z only)
     /// </summary>
-    public void RemoveChunk(SharedVector3i chunkPos)
+    public void RemoveChunk(SharedVector2i chunkPos)
     {
         if (_chunkMeshes.TryGetValue(chunkPos, out var mesh))
         {

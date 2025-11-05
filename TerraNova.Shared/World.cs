@@ -1,20 +1,20 @@
 namespace TerraNova.Shared;
 
 /// <summary>
-/// Manages the voxel world and block placement using chunk-based storage
+/// Manages the voxel world and block placement using chunk-based storage (2D column chunks)
 /// </summary>
 public class World
 {
-    // Dictionary to store chunks by their chunk position
-    private readonly Dictionary<Vector3i, Chunk> _chunks = new();
+    // Dictionary to store chunk columns by their 2D position (X, Z)
+    private readonly Dictionary<Vector2i, Chunk> _chunks = new();
 
     /// <summary>
     /// Sets a block at the given world position
     /// </summary>
     public void SetBlock(int x, int y, int z, BlockType blockType)
     {
-        // Calculate which chunk this block belongs to
-        Vector3i chunkPos = Chunk.WorldToChunkPosition(x, y, z);
+        // Calculate which chunk column this block belongs to (X, Z only)
+        Vector2i chunkPos = Chunk.WorldToChunkPosition(x, z);
         Vector3i localPos = Chunk.WorldToLocalPosition(x, y, z);
 
         // Get or create the chunk
@@ -36,8 +36,8 @@ public class World
     /// </summary>
     public BlockType GetBlock(int x, int y, int z)
     {
-        // Calculate which chunk this block belongs to
-        Vector3i chunkPos = Chunk.WorldToChunkPosition(x, y, z);
+        // Calculate which chunk column this block belongs to (X, Z only)
+        Vector2i chunkPos = Chunk.WorldToChunkPosition(x, z);
         Vector3i localPos = Chunk.WorldToLocalPosition(x, y, z);
 
         // Get the chunk (if it doesn't exist, return Air)
@@ -90,9 +90,9 @@ public class World
     }
 
     /// <summary>
-    /// Gets a specific chunk at the given chunk position (not world position)
+    /// Gets a specific chunk at the given 2D chunk position (X, Z only)
     /// </summary>
-    public Chunk? GetChunk(Vector3i chunkPosition)
+    public Chunk? GetChunk(Vector2i chunkPosition)
     {
         _chunks.TryGetValue(chunkPosition, out var chunk);
         return chunk;

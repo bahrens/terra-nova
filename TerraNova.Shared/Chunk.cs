@@ -1,21 +1,22 @@
 namespace TerraNova.Shared;
 
 /// <summary>
-/// Represents a 16x16x16 region of blocks in the world.
+/// Represents a 16x16 column of blocks spanning the full world height (Minecraft-style).
 /// Chunks are the fundamental unit for rendering and world management.
 /// </summary>
 public class Chunk
 {
-    public const int ChunkSize = 16; // 16x16x16 blocks per chunk
+    public const int ChunkSize = 16; // 16x16 horizontal size
+    public const int WorldHeight = 128; // Full vertical range (can be made configurable later)
 
     /// <summary>
-    /// Position of this chunk in chunk coordinates (not block coordinates)
-    /// Block position = ChunkPosition * ChunkSize
+    /// Position of this chunk in 2D chunk coordinates (X, Z only - no Y coordinate)
+    /// Block position = (ChunkPosition.X * ChunkSize, Y, ChunkPosition.Z * ChunkSize)
     /// </summary>
-    public Vector3i ChunkPosition { get; }
+    public Vector2i ChunkPosition { get; }
 
     /// <summary>
-    /// 3D array storing block types [x, y, z] where each dimension is 0-15
+    /// 3D array storing block types [x, y, z] where x and z are 0-15, y is 0-127
     /// Using array instead of dictionary for dense storage efficiency
     /// </summary>
     private readonly BlockType[,,] _blocks;
@@ -25,15 +26,15 @@ public class Chunk
     /// </summary>
     public bool IsDirty { get; set; }
 
-    public Chunk(Vector3i chunkPosition)
+    public Chunk(Vector2i chunkPosition)
     {
         ChunkPosition = chunkPosition;
-        _blocks = new BlockType[ChunkSize, ChunkSize, ChunkSize];
+        _blocks = new BlockType[ChunkSize, WorldHeight, ChunkSize];
 
         // Initialize all blocks to Air
         for (int x = 0; x < ChunkSize; x++)
         {
-            for (int y = 0; y < ChunkSize; y++)
+            for (int y = 0; y < WorldHeight; y++)
             {
                 for (int z = 0; z < ChunkSize; z++)
                 {
@@ -46,7 +47,7 @@ public class Chunk
     }
 
     /// <summary>
-    /// Gets a block at local chunk coordinates (0-15 for each axis)
+    /// Gets a block at local chunk coordinates (x,z: 0-15; y: 0-127)
     /// </summary>
     public BlockType GetBlock(int localX, int localY, int localZ)
     {
@@ -57,7 +58,7 @@ public class Chunk
     }
 
     /// <summary>
-    /// Sets a block at local chunk coordinates (0-15 for each axis)
+    /// Sets a block at local chunk coordinates (x,z: 0-15; y: 0-127)
     /// </summary>
     public void SetBlock(int localX, int localY, int localZ, BlockType blockType)
     {
@@ -74,7 +75,7 @@ public class Chunk
     private bool IsValidLocalPosition(int x, int y, int z)
     {
         return x >= 0 && x < ChunkSize &&
-               y >= 0 && y < ChunkSize &&
+               y >= 0 && y < WorldHeight &&
                z >= 0 && z < ChunkSize;
     }
 
@@ -93,33 +94,34 @@ public class Chunk
     {
         return new Vector3i(
             ChunkPosition.X * ChunkSize + localX,
-            ChunkPosition.Y * ChunkSize + localY,
+            localY, // Y coordinate is absolute (not relative to chunk)
             ChunkPosition.Z * ChunkSize + localZ
         );
     }
 
     /// <summary>
-    /// Converts world coordinates to chunk coordinates
+    /// Converts world coordinates to 2D chunk coordinates (X, Z only)
     /// </summary>
-    public static Vector3i WorldToChunkPosition(int worldX, int worldY, int worldZ)
+    public static Vector2i WorldToChunkPosition(int worldX, int worldZ)
     {
-        return new Vector3i(
+        return new Vector2i(
             (int)Math.Floor((double)worldX / ChunkSize),
-            (int)Math.Floor((double)worldY / ChunkSize),
             (int)Math.Floor((double)worldZ / ChunkSize)
         );
     }
 
     /// <summary>
-    /// Converts world coordinates to local chunk coordinates (0-15)
+    /// Converts world coordinates to local chunk coordinates
+    /// For X and Z: 0-15 range (horizontal position within chunk)
+    /// For Y: unchanged (absolute world Y coordinate 0-127)
     /// </summary>
     public static Vector3i WorldToLocalPosition(int worldX, int worldY, int worldZ)
     {
-        // Modulo operation to get 0-15 range
+        // Modulo operation to get 0-15 range for X and Z
         int localX = ((worldX % ChunkSize) + ChunkSize) % ChunkSize;
-        int localY = ((worldY % ChunkSize) + ChunkSize) % ChunkSize;
         int localZ = ((worldZ % ChunkSize) + ChunkSize) % ChunkSize;
 
-        return new Vector3i(localX, localY, localZ);
+        // Y is absolute in 2D column chunks
+        return new Vector3i(localX, worldY, localZ);
     }
 }

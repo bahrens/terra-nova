@@ -10,7 +10,7 @@ public class GameEngine
 {
     private readonly IRenderer _renderer;
     private World? _world;
-    private readonly HashSet<Vector3i> _dirtyChunks = new();
+    private readonly HashSet<Vector2i> _dirtyChunks = new();
 
     public GameEngine(IRenderer renderer)
     {
@@ -45,26 +45,22 @@ public class GameEngine
         {
             _world.SetBlock(x, y, z, blockType);
 
-            // Mark the chunk containing this block as dirty
-            var chunkPos = Chunk.WorldToChunkPosition(x, y, z);
+            // Mark the chunk column containing this block as dirty (2D position only)
+            var chunkPos = Chunk.WorldToChunkPosition(x, z);
             _dirtyChunks.Add(chunkPos);
 
-            // Also mark adjacent chunks if the block is on a chunk boundary
+            // Also mark adjacent chunk columns if the block is on a chunk boundary
             // (for proper face culling at chunk edges)
+            // Note: In 2D column chunks, we only mark horizontal adjacents (X and Z), not vertical
             if (x % Chunk.ChunkSize == 0)
-                _dirtyChunks.Add(new Vector3i(chunkPos.X - 1, chunkPos.Y, chunkPos.Z));
+                _dirtyChunks.Add(new Vector2i(chunkPos.X - 1, chunkPos.Z));
             if (x % Chunk.ChunkSize == Chunk.ChunkSize - 1)
-                _dirtyChunks.Add(new Vector3i(chunkPos.X + 1, chunkPos.Y, chunkPos.Z));
-
-            if (y % Chunk.ChunkSize == 0)
-                _dirtyChunks.Add(new Vector3i(chunkPos.X, chunkPos.Y - 1, chunkPos.Z));
-            if (y % Chunk.ChunkSize == Chunk.ChunkSize - 1)
-                _dirtyChunks.Add(new Vector3i(chunkPos.X, chunkPos.Y + 1, chunkPos.Z));
+                _dirtyChunks.Add(new Vector2i(chunkPos.X + 1, chunkPos.Z));
 
             if (z % Chunk.ChunkSize == 0)
-                _dirtyChunks.Add(new Vector3i(chunkPos.X, chunkPos.Y, chunkPos.Z - 1));
+                _dirtyChunks.Add(new Vector2i(chunkPos.X, chunkPos.Z - 1));
             if (z % Chunk.ChunkSize == Chunk.ChunkSize - 1)
-                _dirtyChunks.Add(new Vector3i(chunkPos.X, chunkPos.Y, chunkPos.Z + 1));
+                _dirtyChunks.Add(new Vector2i(chunkPos.X, chunkPos.Z + 1));
         }
     }
 
