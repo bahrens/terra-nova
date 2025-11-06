@@ -52,25 +52,39 @@ public class Camera
     {
         float velocity = Speed * deltaTime;
 
+        // For horizontal movement (WASD), use front vector without pitch
+        // This keeps movement on the horizontal plane regardless of where the camera is looking
+        Vector3 frontHorizontal = new Vector3(_front.X, 0, _front.Z);
+        if (frontHorizontal.LengthSquared > 0)
+        {
+            frontHorizontal = Vector3.Normalize(frontHorizontal);
+        }
+
+        Vector3 rightHorizontal = new Vector3(_right.X, 0, _right.Z);
+        if (rightHorizontal.LengthSquared > 0)
+        {
+            rightHorizontal = Vector3.Normalize(rightHorizontal);
+        }
+
         switch (direction)
         {
             case CameraMovement.Forward:
-                Position += _front * velocity;
+                Position += frontHorizontal * velocity;
                 break;
             case CameraMovement.Backward:
-                Position -= _front * velocity;
+                Position -= frontHorizontal * velocity;
                 break;
             case CameraMovement.Left:
-                Position -= _right * velocity;
+                Position -= rightHorizontal * velocity;
                 break;
             case CameraMovement.Right:
-                Position += _right * velocity;
+                Position += rightHorizontal * velocity;
                 break;
             case CameraMovement.Up:
-                Position += _up * velocity;
+                Position += Vector3.UnitY * velocity;
                 break;
             case CameraMovement.Down:
-                Position -= _up * velocity;
+                Position -= Vector3.UnitY * velocity;
                 break;
         }
     }
