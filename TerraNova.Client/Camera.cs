@@ -21,7 +21,7 @@ public class Camera
     // Camera settings
     public float Speed { get; set; } = 5.0f;      // Movement speed (units per second)
     public float Sensitivity { get; set; } = 0.002f; // Mouse sensitivity
-    public float Fov { get; set; } = MathHelper.DegreesToRadians(75.0f); // Field of view (stored in radians)
+    public float Fov { get; set; } = MathHelper.DegreesToRadians(70.0f); // Field of view (stored in radians)
 
     public Camera(Vector3 position)
     {
@@ -42,7 +42,7 @@ public class Camera
     /// </summary>
     public Matrix4 GetProjectionMatrix(float aspectRatio)
     {
-        return Matrix4.CreatePerspectiveFieldOfView(Fov, aspectRatio, 0.1f, 1000.0f);
+        return Matrix4.CreatePerspectiveFieldOfView(Fov, aspectRatio, 0.1f, 200.0f);
     }
 
     /// <summary>

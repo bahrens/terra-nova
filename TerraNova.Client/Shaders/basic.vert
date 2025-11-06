@@ -8,6 +8,7 @@ layout (location = 2) in vec3 aColor;     // Vertex color (for tinting/lighting)
 // Output: data to pass to fragment shader
 out vec2 texCoord;
 out vec3 vertexColor;
+out float fogDistance;  // Distance from camera for fog calculation
 
 // Uniforms: transformation matrices passed from C# code
 uniform mat4 model;       // Model matrix: object space -> world space
@@ -16,9 +17,13 @@ uniform mat4 projection;  // Projection matrix: camera space -> screen space
 
 void main()
 {
+    // Transform vertex to view space to calculate distance from camera
+    vec4 viewPosition = view * model * vec4(aPosition, 1.0);
+    fogDistance = length(viewPosition.xyz);
+
     // Transform vertex position through all transformation matrices
     // This converts from 3D object coordinates to 2D screen coordinates
-    gl_Position = projection * view * model * vec4(aPosition, 1.0);
+    gl_Position = projection * viewPosition;
 
     // Pass texture coordinates and color to the fragment shader
     texCoord = aTexCoord;

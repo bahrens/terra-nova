@@ -65,12 +65,19 @@ window.terraNovaRenderer = (function() {
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87CEEB); // Sky blue
 
-        // Create camera with wider FOV for closer viewing
+        // Add Minecraft-like fog (linear fog from 6 chunks to far plane)
+        scene.fog = new THREE.Fog(
+            0x87CEEB,  // Sky blue color (matches background)
+            96,        // Fog starts at 6 chunks (96 blocks)
+            200        // Fog ends at far plane (200 blocks)
+        );
+
+        // Create camera with Minecraft-like FOV and view distance
         camera = new THREE.PerspectiveCamera(
-            75, // FOV
+            70, // FOV (matches Minecraft)
             window.innerWidth / window.innerHeight, // Aspect ratio
             0.1, // Near plane
-            1000 // Far plane
+            200 // Far plane (just beyond 8 chunk render distance = 128 blocks)
         );
         // Position camera higher and farther to see the terrain layers
         camera.position.set(8, 10, 20);
