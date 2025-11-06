@@ -46,4 +46,14 @@ public interface INetworkClient
     /// Send a block update to the server
     /// </summary>
     void SendBlockUpdate(int x, int y, int z, BlockType blockType);
+
+    /// <summary>
+    /// Request specific chunks from the server
+    /// </summary>
+    void RequestChunks(Vector2i[] chunkPositions);
+
+    /// <summary>
+    /// Callback when a chunk is received from the server
+    /// </summary>
+    event Action<Vector2i, BlockData[]>? OnChunkReceived;
 }

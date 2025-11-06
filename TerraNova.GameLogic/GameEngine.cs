@@ -11,6 +11,13 @@ public class GameEngine
     private readonly IRenderer _renderer;
     private World? _world;
     private readonly HashSet<Vector2i> _dirtyChunks = new();
+    private ChunkLoader? _chunkLoader;
+
+    /// <summary>
+    /// Callback for requesting chunks from server.
+    /// Set this on the client side to handle network communication.
+    /// </summary>
+    public Action<Vector2i[]>? OnChunkRequestNeeded { get; set; }
 
     public GameEngine(IRenderer renderer)
     {
@@ -23,11 +30,16 @@ public class GameEngine
     public World? World => _world;
 
     /// <summary>
-    /// Set the world data (called when receiving world from server)
+    /// Set the world data (called when receiving world from server or initializing)
     /// </summary>
     public void SetWorld(World world)
     {
         _world = world;
+
+        // Initialize ChunkLoader for dynamic chunk loading
+        _chunkLoader = new ChunkLoader(_world);
+        _chunkLoader.OnChunkRequestNeeded = OnChunkRequestNeeded;
+
         // Mark all chunks as dirty when world is loaded
         _dirtyChunks.Clear();
         foreach (var chunk in _world.GetAllChunks())
@@ -62,6 +74,23 @@ public class GameEngine
             if (z % Chunk.ChunkSize == Chunk.ChunkSize - 1)
                 _dirtyChunks.Add(new Vector2i(chunkPos.X, chunkPos.Z + 1));
         }
+    }
+
+    /// <summary>
+    /// Update player position for chunk loading (called when player moves)
+    /// </summary>
+    public void UpdatePlayerPosition(Vector3 playerPosition)
+    {
+        _chunkLoader?.Update(playerPosition);
+    }
+
+    /// <summary>
+    /// Notify that a chunk has been received from the server and added to the world
+    /// </summary>
+    public void NotifyChunkReceived(Vector2i chunkPos)
+    {
+        _chunkLoader?.MarkChunkLoaded(chunkPos);
+        _dirtyChunks.Add(chunkPos);
     }
 
     /// <summary>

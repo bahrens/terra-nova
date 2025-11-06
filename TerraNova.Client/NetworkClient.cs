@@ -21,6 +21,8 @@ public class NetworkClient : INetworkClient, INetEventListener
     public World? World => _world;
     public bool WorldChanged { get; set; }
 
+    public event Action<Vector2i, BlockData[]>? OnChunkReceived;
+
     public NetworkClient(ILogger<NetworkClient> logger)
     {
         _logger = logger;
@@ -63,10 +65,32 @@ public class NetworkClient : INetworkClient, INetEventListener
         _logger.LogDebug("Sent block update: ({X},{Y},{Z}) -> {BlockType}", x, y, z, blockType);
     }
 
+    public void RequestChunks(Vector2i[] chunkPositions)
+    {
+        if (_serverPeer == null || !IsConnected)
+        {
+            _logger.LogWarning("Cannot request chunks: not connected to server");
+            return;
+        }
+
+        var chunkRequest = new ChunkRequestMessage(chunkPositions);
+        var writer = new NetDataWriter();
+        writer.Put((byte)MessageType.ChunkRequest);
+        writer.Put(chunkRequest);
+
+        _serverPeer.Send(writer, DeliveryMethod.ReliableOrdered);
+        _logger.LogDebug("Requested {Count} chunks from server", chunkPositions.Length);
+    }
+
     // INetEventListener implementation
     public void OnPeerConnected(NetPeer peer)
     {
         _logger.LogInformation("Connected to server!");
+
+        // Initialize with an empty world immediately
+        _world = new World();
+        _worldReceived = true;
+        _logger.LogInformation("Empty world initialized - chunks will load on demand");
 
         // Send connection message
         var writer = new NetDataWriter();
@@ -91,6 +115,11 @@ public class NetworkClient : INetworkClient, INetEventListener
             case MessageType.WorldData:
                 var worldData = reader.GetWorldDataMessage();
                 ReceiveWorldData(worldData);
+                break;
+
+            case MessageType.ChunkData:
+                var chunkData = reader.GetChunkDataMessage();
+                ReceiveChunkData(chunkData);
                 break;
 
             case MessageType.BlockUpdate:
@@ -129,8 +158,11 @@ public class NetworkClient : INetworkClient, INetEventListener
     {
         _logger.LogInformation("Received world data: {BlockCount} blocks", worldData.Blocks.Length);
 
-        // Create world and populate it
-        _world = new World();
+        // Create world and populate it (legacy support for full world data)
+        if (_world == null)
+        {
+            _world = new World();
+        }
 
         foreach (var block in worldData.Blocks)
         {
@@ -138,6 +170,28 @@ public class NetworkClient : INetworkClient, INetEventListener
         }
 
         _worldReceived = true;
+        WorldChanged = true;
         _logger.LogInformation("World loaded from server!");
+    }
+
+    private void ReceiveChunkData(ChunkDataMessage chunkData)
+    {
+        _logger.LogInformation("Received chunk ({X},{Z}) with {BlockCount} blocks",
+            chunkData.ChunkPosition.X, chunkData.ChunkPosition.Z, chunkData.Blocks.Length);
+
+        if (_world == null)
+        {
+            _logger.LogWarning("Cannot receive chunk data: world not initialized");
+            return;
+        }
+
+        // Add all blocks from this chunk to the world
+        foreach (var block in chunkData.Blocks)
+        {
+            _world.SetBlock(block.X, block.Y, block.Z, block.Type);
+        }
+
+        // Notify listeners that a chunk was received
+        OnChunkReceived?.Invoke(chunkData.ChunkPosition, chunkData.Blocks);
     }
 }

@@ -76,4 +76,80 @@ public static class NetworkSerializer
             (BlockType)reader.GetByte()
         );
     }
+
+    // Vector2i
+    public static void Put(this NetDataWriter writer, Vector2i vector)
+    {
+        writer.Put(vector.X);
+        writer.Put(vector.Z);
+    }
+
+    public static Vector2i GetVector2i(this NetDataReader reader)
+    {
+        return new Vector2i(
+            reader.GetInt(),
+            reader.GetInt()
+        );
+    }
+
+    // ChunkRequestMessage
+    public static void Put(this NetDataWriter writer, ChunkRequestMessage message)
+    {
+        writer.Put(message.ChunkPositions.Length);
+        foreach (var chunkPos in message.ChunkPositions)
+        {
+            writer.Put(chunkPos);
+        }
+    }
+
+    public static ChunkRequestMessage GetChunkRequestMessage(this NetDataReader reader)
+    {
+        int count = reader.GetInt();
+        var positions = new Vector2i[count];
+        for (int i = 0; i < count; i++)
+        {
+            positions[i] = reader.GetVector2i();
+        }
+        return new ChunkRequestMessage(positions);
+    }
+
+    // ChunkDataMessage
+    public static void Put(this NetDataWriter writer, ChunkDataMessage message)
+    {
+        writer.Put(message.ChunkPosition);
+        writer.Put(message.Blocks.Length);
+        foreach (var block in message.Blocks)
+        {
+            writer.Put(block);
+        }
+    }
+
+    public static ChunkDataMessage GetChunkDataMessage(this NetDataReader reader)
+    {
+        var chunkPos = reader.GetVector2i();
+        int blockCount = reader.GetInt();
+        var blocks = new BlockData[blockCount];
+        for (int i = 0; i < blockCount; i++)
+        {
+            blocks[i] = reader.GetBlockData();
+        }
+        return new ChunkDataMessage(chunkPos, blocks);
+    }
+
+    // PlayerPositionMessage
+    public static void Put(this NetDataWriter writer, PlayerPositionMessage message)
+    {
+        writer.Put(message.X);
+        writer.Put(message.Y);
+        writer.Put(message.Z);
+    }
+
+    public static PlayerPositionMessage GetPlayerPositionMessage(this NetDataReader reader)
+    {
+        return new PlayerPositionMessage(
+            reader.GetFloat(),
+            reader.GetFloat(),
+            reader.GetFloat()
+        );
+    }
 }

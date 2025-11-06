@@ -161,7 +161,31 @@ public class Game : GameWindow
             _renderer.Initialize();
             _renderer.SetCameraReference(_camera);
             _gameEngine = new GameEngine(_renderer);
+
+            // Hook up chunk loading system BEFORE calling SetWorld
+            _gameEngine.OnChunkRequestNeeded = (chunks) =>
+            {
+                _logger.LogInformation("Requesting {Count} chunks from server", chunks.Length);
+                _networkClient.RequestChunks(chunks);
+            };
+
+            _networkClient.OnChunkReceived += (chunkPos, blocks) =>
+            {
+                _logger.LogInformation("Chunk ({X},{Z}) received with {Count} blocks", chunkPos.X, chunkPos.Z, blocks.Length);
+                _gameEngine.NotifyChunkReceived(chunkPos);
+            };
+
+            // Now set the world (this creates ChunkLoader with the callback)
             _gameEngine.SetWorld(_world);
+
+            _logger.LogInformation("Chunk streaming enabled!");
+        }
+
+        // Update player position for chunk loading
+        if (_gameEngine != null)
+        {
+            var cameraPos = _camera.Position.ToShared();
+            _gameEngine.UpdatePlayerPosition(cameraPos);
         }
 
         // Handle block interaction if world is loaded

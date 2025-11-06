@@ -19,6 +19,18 @@ public class GameServer : IGameServer, INetEventListener
     private readonly ILogger<GameServer> _logger;
     private WebSocketServer? _webSocketServer;
 
+    // Track each client's state (loaded chunks, position)
+    private readonly Dictionary<NetPeer, ClientState> _clientStates = new();
+
+    /// <summary>
+    /// Per-client state tracking for chunk streaming
+    /// </summary>
+    private class ClientState
+    {
+        public HashSet<Vector2i> LoadedChunks { get; } = new();
+        public Vector3? PlayerPosition { get; set; }
+    }
+
     public GameServer(IOptions<ServerSettings> serverSettings, IOptions<WorldSettings> worldSettings, ILogger<GameServer> logger)
     {
         _serverSettings = serverSettings.Value;
@@ -137,12 +149,20 @@ public class GameServer : IGameServer, INetEventListener
     public void OnPeerConnected(NetPeer peer)
     {
         _logger.LogInformation("Client connected: {Address}", peer.Address);
-        SendWorldData(peer);
+
+        // Initialize client state for chunk streaming
+        _clientStates[peer] = new ClientState();
+
+        // Don't send all world data immediately - wait for chunk requests from client
+        _logger.LogInformation("Waiting for chunk requests from client {Address}", peer.Address);
     }
 
     public void OnPeerDisconnected(NetPeer peer, DisconnectInfo disconnectInfo)
     {
         _logger.LogInformation("Client disconnected: {Address} (Reason: {Reason})", peer.Address, disconnectInfo.Reason);
+
+        // Clean up client state
+        _clientStates.Remove(peer);
     }
 
     public void OnNetworkReceive(NetPeer peer, NetPacketReader reader, byte channelNumber, DeliveryMethod deliveryMethod)
@@ -154,6 +174,19 @@ public class GameServer : IGameServer, INetEventListener
             case MessageType.ClientConnect:
                 var connectMsg = reader.GetClientConnectMessage();
                 _logger.LogInformation("Player joined: {PlayerName}", connectMsg.PlayerName);
+                break;
+
+            case MessageType.ChunkRequest:
+                var chunkRequest = reader.GetChunkRequestMessage();
+                HandleChunkRequest(peer, chunkRequest);
+                break;
+
+            case MessageType.PlayerPosition:
+                var positionMsg = reader.GetPlayerPositionMessage();
+                if (_clientStates.TryGetValue(peer, out var clientState))
+                {
+                    clientState.PlayerPosition = new Vector3(positionMsg.X, positionMsg.Y, positionMsg.Z);
+                }
                 break;
 
             case MessageType.BlockUpdate:
@@ -234,5 +267,82 @@ public class GameServer : IGameServer, INetEventListener
     {
         var blockUpdate = new BlockUpdateMessage(x, y, z, blockType);
         BroadcastBlockUpdate(blockUpdate);
+    }
+
+    /// <summary>
+    /// Handle chunk request from a client - send requested chunks
+    /// </summary>
+    private void HandleChunkRequest(NetPeer peer, ChunkRequestMessage request)
+    {
+        if (!_clientStates.TryGetValue(peer, out var clientState))
+            return;
+
+        foreach (var chunkPos in request.ChunkPositions)
+        {
+            // Skip if client already has this chunk
+            if (clientState.LoadedChunks.Contains(chunkPos))
+                continue;
+
+            // Get blocks in this chunk column from the world
+            var chunkBlocks = GetChunkBlocks(chunkPos);
+
+            // Send chunk data to client
+            SendChunkData(peer, chunkPos, chunkBlocks);
+
+            // Mark chunk as loaded for this client
+            clientState.LoadedChunks.Add(chunkPos);
+        }
+
+        _logger.LogInformation("Sent {ChunkCount} chunks to client {Address}",
+            request.ChunkPositions.Length, peer.Address);
+    }
+
+    /// <summary>
+    /// Get all blocks in a chunk column (2D position)
+    /// </summary>
+    private BlockData[] GetChunkBlocks(Vector2i chunkPos)
+    {
+        var blocks = new List<BlockData>();
+        var chunk = _world.GetChunk(chunkPos);
+
+        if (chunk == null)
+            return Array.Empty<BlockData>();
+
+        int chunkWorldX = chunkPos.X * Chunk.ChunkSize;
+        int chunkWorldZ = chunkPos.Z * Chunk.ChunkSize;
+
+        // Iterate through entire chunk column (full height)
+        for (int x = 0; x < Chunk.ChunkSize; x++)
+        {
+            for (int y = 0; y < Chunk.WorldHeight; y++)
+            {
+                for (int z = 0; z < Chunk.ChunkSize; z++)
+                {
+                    var blockType = chunk.GetBlock(x, y, z);
+                    if (blockType != BlockType.Air)
+                    {
+                        int worldX = chunkWorldX + x;
+                        int worldZ = chunkWorldZ + z;
+                        blocks.Add(new BlockData(worldX, y, worldZ, blockType));
+                    }
+                }
+            }
+        }
+
+        return blocks.ToArray();
+    }
+
+    /// <summary>
+    /// Send chunk data to a specific client
+    /// </summary>
+    private void SendChunkData(NetPeer peer, Vector2i chunkPos, BlockData[] blocks)
+    {
+        var chunkDataMsg = new ChunkDataMessage(chunkPos, blocks);
+
+        var writer = new NetDataWriter();
+        writer.Put((byte)MessageType.ChunkData);
+        writer.Put(chunkDataMsg);
+
+        peer.Send(writer, DeliveryMethod.ReliableOrdered);
     }
 }
