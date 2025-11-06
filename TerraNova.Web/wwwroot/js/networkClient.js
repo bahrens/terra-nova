@@ -6,18 +6,21 @@ window.terraNovaNetwork = (function() {
     let connected = false;
     let worldDataCallback = null;
     let blockUpdateCallback = null;
+    let chunkDataCallback = null;
 
     /**
      * Connect to the game server
      * @param {string} serverUrl - WebSocket server URL (e.g., "ws://localhost:5000/ws")
      * @param {function} onWorldData - Callback when world data is received
      * @param {function} onBlockUpdate - Callback when block update is received
+     * @param {function} onChunkData - Callback when chunk data is received
      */
-    function connect(serverUrl, onWorldData, onBlockUpdate) {
+    function connect(serverUrl, onWorldData, onBlockUpdate, onChunkData) {
         console.log(`Connecting to server: ${serverUrl}`);
 
         worldDataCallback = onWorldData;
         blockUpdateCallback = onBlockUpdate;
+        chunkDataCallback = onChunkData;
 
         ws = new WebSocket(serverUrl);
 
@@ -102,6 +105,13 @@ window.terraNovaNetwork = (function() {
                 }
                 break;
 
+            case MessageType.CHUNK_DATA:
+                console.log(`Received chunk data: (${message.chunkX}, ${message.chunkZ}) with ${message.blocks.length} blocks`);
+                if (chunkDataCallback) {
+                    chunkDataCallback(message.chunkX, message.chunkZ, message.blocks);
+                }
+                break;
+
             default:
                 console.warn('Unknown message type:', message.type);
         }
@@ -126,6 +136,19 @@ window.terraNovaNetwork = (function() {
     }
 
     /**
+     * Request specific chunks from the server
+     * @param {Array<{x: number, z: number}>} chunkPositions - Array of chunk positions to request
+     */
+    function requestChunks(chunkPositions) {
+        const message = {
+            type: MessageType.CHUNK_REQUEST,
+            chunkPositions: chunkPositions
+        };
+        sendMessage(message);
+        console.log(`Requested ${chunkPositions.length} chunks from server`);
+    }
+
+    /**
      * Check if connected to server
      */
     function isConnected() {
@@ -137,6 +160,7 @@ window.terraNovaNetwork = (function() {
         connect: connect,
         disconnect: disconnect,
         sendBlockUpdate: sendBlockUpdate,
+        requestChunks: requestChunks,
         isConnected: isConnected
     };
 })();

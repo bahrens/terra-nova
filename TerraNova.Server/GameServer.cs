@@ -300,7 +300,7 @@ public class GameServer : IGameServer, INetEventListener
     /// <summary>
     /// Get all blocks in a chunk column (2D position)
     /// </summary>
-    private BlockData[] GetChunkBlocks(Vector2i chunkPos)
+    public BlockData[] GetChunkBlocks(Vector2i chunkPos)
     {
         var blocks = new List<BlockData>();
         var chunk = _world.GetChunk(chunkPos);

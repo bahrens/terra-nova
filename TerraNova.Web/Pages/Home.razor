@@ -1,4 +1,4 @@
-﻿@page "/"
+@page "/"
 @using TerraNova.GameLogic
 @using TerraNova.Shared
 @inject ThreeJsRenderer Renderer
@@ -8,7 +8,7 @@
 
 <div style="position: fixed; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; font-family: monospace; z-index: 1000;">
     <h3 style="margin: 0 0 5px 0;">Terra Nova Web Client</h3>
-    <p style="margin: 0;">Network Mode</p>
+    <p style="margin: 0;">Chunk Streaming Mode</p>
     <p style="margin: 5px 0 0 0; font-size: 12px;">@statusMessage</p>
 </div>
 
@@ -20,8 +20,10 @@
 
 @code {
     private string statusMessage = "Initializing...";
-    private World? world = null; // Store world reference for block updates
-    private GameEngine? gameEngine = null; // GameEngine manages world state and rendering
+    private World? world = null;
+    private GameEngine? gameEngine = null;
+    private System.Threading.Timer? positionUpdateTimer = null;
+    private int chunksReceived = 0;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -54,54 +56,40 @@
             // Store the reference in JavaScript using the helper function
             await JS.InvokeVoidAsync("terraNova.setHomeComponentReference", dotNetRef);
 
-            // Connect to the server (running on port 5000 by default)
-            // Use window.location.hostname to connect to the same host that served this page
+            // Connect to the server with chunk streaming support
             await JS.InvokeVoidAsync("eval", @"
                 const serverHost = window.location.hostname;
                 terraNovaNetwork.connect(
                     `ws://${serverHost}:5000/ws`,
                     (blocks) => {
-                        console.log('Received world data from server:', blocks.length, 'blocks');
-
-                        // Group blocks by chunk column (2D: X, Z only)
-                        const chunks = {};
-                        blocks.forEach(block => {
-                            const chunkX = Math.floor(block.x / 16);
-                            const chunkZ = Math.floor(block.z / 16);
-                            const chunkKey = `${chunkX},${chunkZ}`;
-
-                            if (!chunks[chunkKey]) {
-                                chunks[chunkKey] = {
-                                    chunkX: chunkX,
-                                    chunkZ: chunkZ,
-                                    blocks: []
-                                };
-                            }
-                            chunks[chunkKey].blocks.push(block);
-                        });
-
-                        // Process each chunk via C# (we'll call back via JSInterop)
-                        window.terraNovaReceivedChunks = chunks;
+                        // Legacy full world data handler (no longer used with chunk streaming)
+                        console.log('Received legacy world data (ignored in chunk streaming mode)');
                     },
                     async (x, y, z, blockType) => {
+                        // Block update handler
                         console.log('Block update:', x, y, z, blockType);
                         if (window.terraNovaHomeComponent) {
                             await window.terraNovaHomeComponent.invokeMethodAsync('HandleBlockUpdate', x, y, z, blockType);
-                        } else {
-                            console.error('terraNovaHomeComponent not available for block update callback');
+                        }
+                    },
+                    async (chunkX, chunkZ, blocks) => {
+                        // Chunk data handler
+                        console.log('Chunk data received:', chunkX, chunkZ, blocks.length, 'blocks');
+                        if (window.terraNovaHomeComponent) {
+                            await window.terraNovaHomeComponent.invokeMethodAsync('HandleChunkData', chunkX, chunkZ, JSON.stringify(blocks));
                         }
                     }
                 );
             ");
 
-            // Wait a bit for connection
+            // Wait for connection
             await Task.Delay(1000);
 
-            statusMessage = "Connected! Loading world...";
+            statusMessage = "Connected! Initializing world...";
             StateHasChanged();
 
-            // Poll for received chunks and process them
-            await ProcessServerChunks();
+            // Initialize empty world and GameEngine immediately
+            await InitializeWorldWithChunkStreaming();
         }
         catch (Exception ex)
         {
@@ -110,73 +98,131 @@
         }
     }
 
-    private async Task ProcessServerChunks()
+    private async Task InitializeWorldWithChunkStreaming()
     {
         try
         {
-            await JS.InvokeVoidAsync("console.log", "ProcessServerChunks starting...");
+            await JS.InvokeVoidAsync("console.log", "Initializing empty world with chunk streaming...");
 
-            // Get the chunks received from JavaScript
-            var chunksJson = await JS.InvokeAsync<string>("eval", "JSON.stringify(window.terraNovaReceivedChunks || {})");
-            await JS.InvokeVoidAsync("console.log", $"Chunks JSON length: {chunksJson?.Length ?? 0}");
+            // Create empty world
+            world = new World();
+            gameEngine = new GameEngine(Renderer);
 
-            if (string.IsNullOrEmpty(chunksJson) || chunksJson == "{}")
+            // Hook up chunk request callback BEFORE calling SetWorld
+            gameEngine.OnChunkRequestNeeded = async (chunks) =>
             {
-                statusMessage = "Waiting for world data...";
-                StateHasChanged();
-                await JS.InvokeVoidAsync("console.log", "No chunks yet, retrying...");
-                // Retry after a delay
-                await Task.Delay(500);
-                await ProcessServerChunks();
-                return;
-            }
+                await JS.InvokeVoidAsync("console.log", $"GameEngine requesting {chunks.Length} chunks from server");
 
-            await JS.InvokeVoidAsync("console.log", "Deserializing chunks...");
-            // Parse and process chunks via C#
-            var chunks = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, ChunkData>>(chunksJson);
-            await JS.InvokeVoidAsync("console.log", $"Deserialized {chunks?.Count ?? 0} chunks");
+                // Convert Vector2i[] to JS-friendly format
+                var chunkPositions = chunks.Select(c => new { x = c.X, z = c.Z }).ToArray();
+                var jsArray = System.Text.Json.JsonSerializer.Serialize(chunkPositions);
 
-            if (chunks != null && chunks.Count > 0)
+                // Request chunks from server
+                await JS.InvokeVoidAsync("eval", $"terraNovaNetwork.requestChunks({jsArray})");
+            };
+
+            // Now set the world (this creates ChunkLoader with the callback)
+            gameEngine.SetWorld(world);
+
+            await JS.InvokeVoidAsync("console.log", "GameEngine initialized with empty world and chunk streaming");
+
+            statusMessage = $"World initialized! Chunks loading... ({chunksReceived} received)";
+            StateHasChanged();
+
+            // Start player position update timer (update every 100ms)
+            positionUpdateTimer = new System.Threading.Timer(async _ =>
             {
-                await JS.InvokeVoidAsync("console.log", "Creating world and GameEngine...");
-                world = new World();
-                gameEngine = new GameEngine(Renderer);
-
-                // Add all blocks to the world
-                await JS.InvokeVoidAsync("console.log", "Adding blocks to world...");
-                foreach (var chunkData in chunks.Values)
+                try
                 {
-                    foreach (var block in chunkData.Blocks)
-                    {
-                        world.SetBlock(block.X, block.Y, block.Z, (BlockType)block.Type);
-
-                        // Also populate block interaction system's world data
-                        await JS.InvokeVoidAsync("eval", $"if (window.terraNovaBlockInteraction) {{ window.terraNovaBlockInteraction.setBlockData({block.X}, {block.Y}, {block.Z}, {block.Type}); }}");
-                    }
+                    await UpdatePlayerPosition();
                 }
-
-                // Initialize GameEngine with the populated world
-                await JS.InvokeVoidAsync("console.log", "Initializing GameEngine with world...");
-                gameEngine.SetWorld(world);
-
-                // GameEngine.Update will regenerate all chunk meshes
-                await JS.InvokeVoidAsync("console.log", "Updating GameEngine to generate meshes...");
-                gameEngine.Update(0); // Delta time doesn't matter for initial mesh generation
-
-                await JS.InvokeVoidAsync("console.log", "All chunks rendered by GameEngine!");
-                statusMessage = $"World loaded! ({chunks.Count} chunks)";
-                StateHasChanged();
-            }
+                catch (Exception ex)
+                {
+                    await JS.InvokeVoidAsync("console.error", $"Error updating player position: {ex.Message}");
+                }
+            }, null, TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(100));
         }
         catch (Exception ex)
         {
-            statusMessage = $"Error loading world: {ex.Message}";
+            statusMessage = $"Error initializing world: {ex.Message}";
             StateHasChanged();
         }
     }
 
+    private async Task UpdatePlayerPosition()
+    {
+        if (gameEngine == null) return;
+
+        try
+        {
+            // Get camera position from Three.js renderer
+            var posJson = await JS.InvokeAsync<string>("eval", "JSON.stringify(window.terraNovaRenderer.getCameraPosition())");
+            var pos = System.Text.Json.JsonSerializer.Deserialize<CameraPosition>(posJson);
+
+            if (pos != null)
+            {
+                var playerPos = new Vector3(pos.X, pos.Y, pos.Z);
+                gameEngine.UpdatePlayerPosition(playerPos);
+            }
+        }
+        catch
+        {
+            // Silently ignore errors (camera might not be ready yet)
+        }
+    }
+
     /// <summary>
-    /// Handle block updates from the server and let GameEngine rebuild affected chunks
+    /// Handle chunk data from the server
+    /// </summary>
+    [Microsoft.JSInterop.JSInvokable]
+    public async Task HandleChunkData(int chunkX, int chunkZ, string blocksJson)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("console.log", $"HandleChunkData called: chunk ({chunkX},{chunkZ})");
+
+            if (world == null || gameEngine == null)
+            {
+                await JS.InvokeVoidAsync("console.warn", "World or GameEngine not initialized yet");
+                return;
+            }
+
+            // Deserialize blocks
+            var blocks = System.Text.Json.JsonSerializer.Deserialize<List<BlockData>>(blocksJson);
+            if (blocks == null) return;
+
+            await JS.InvokeVoidAsync("console.log", $"Received {blocks.Count} blocks for chunk ({chunkX},{chunkZ})");
+
+            // Add blocks to world
+            foreach (var block in blocks)
+            {
+                world.SetBlock(block.X, block.Y, block.Z, (BlockType)block.Type);
+
+                // Also update block interaction system
+                await JS.InvokeVoidAsync("eval", $"if (window.terraNovaBlockInteraction) {{ window.terraNovaBlockInteraction.setBlockData({block.X}, {block.Y}, {block.Z}, {block.Type}); }}");
+            }
+
+            // Notify GameEngine that chunk was received
+            gameEngine.NotifyChunkReceived(new Vector2i(chunkX, chunkZ));
+
+            // Update GameEngine to regenerate meshes
+            await Task.Yield(); // Let UI update first
+            gameEngine.Update(0); // Delta time doesn't matter for mesh regeneration
+
+            chunksReceived++;
+            statusMessage = $"Chunks loaded: {chunksReceived}";
+            StateHasChanged();
+
+            await JS.InvokeVoidAsync("console.log", $"Chunk ({chunkX},{chunkZ}) processed by GameEngine");
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error in HandleChunkData: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Handle block updates from the server
     /// </summary>
     [Microsoft.JSInterop.JSInvokable]
     public async Task HandleBlockUpdate(int x, int y, int z, int blockType)
@@ -187,16 +233,16 @@
 
             if (world == null || gameEngine == null)
             {
-                await JS.InvokeVoidAsync("console.warn", "World or GameEngine not initialized yet, skipping block update");
+                await JS.InvokeVoidAsync("console.warn", "World or GameEngine not initialized yet");
                 return;
             }
 
             // Update world data via GameEngine
             gameEngine.NotifyBlockUpdate(x, y, z, (BlockType)blockType);
 
-            // Defer mesh regeneration to avoid blocking UI
-            await Task.Yield(); // Let UI update first
-            gameEngine.Update(0); // Delta time doesn't matter for mesh regeneration
+            // Defer mesh regeneration
+            await Task.Yield();
+            gameEngine.Update(0);
 
             await JS.InvokeVoidAsync("console.log", $"Block update at ({x}, {y}, {z}) processed by GameEngine");
         }
@@ -207,26 +253,7 @@
     }
 
     /// <summary>
-    /// Helper class for JSON deserialization of chunk data received from JavaScript.
-    /// This mirrors the chunk structure created in the JavaScript network client
-    /// when grouping blocks by chunk column position (2D: X, Z only).
-    /// </summary>
-    private class ChunkData
-    {
-        [System.Text.Json.Serialization.JsonPropertyName("chunkX")]
-        public int ChunkX { get; set; }
-
-        [System.Text.Json.Serialization.JsonPropertyName("chunkZ")]
-        public int ChunkZ { get; set; }
-
-        [System.Text.Json.Serialization.JsonPropertyName("blocks")]
-        public List<BlockData> Blocks { get; set; } = new();
-    }
-
-    /// <summary>
-    /// Helper class for JSON deserialization of block data received from JavaScript.
-    /// This mirrors the BlockData structure from TerraNova.Shared/NetworkMessages.cs
-    /// but uses JSON property names for deserialization from the web client.
+    /// Helper class for JSON deserialization of block data
     /// </summary>
     private class BlockData
     {
@@ -241,5 +268,25 @@
 
         [System.Text.Json.Serialization.JsonPropertyName("type")]
         public byte Type { get; set; }
+    }
+
+    /// <summary>
+    /// Helper class for camera position from Three.js
+    /// </summary>
+    private class CameraPosition
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("x")]
+        public float X { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("y")]
+        public float Y { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("z")]
+        public float Z { get; set; }
+    }
+
+    public void Dispose()
+    {
+        positionUpdateTimer?.Dispose();
     }
 }

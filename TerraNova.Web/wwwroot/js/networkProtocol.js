@@ -9,10 +9,13 @@
 window.MessageType = {
     // Client -> Server
     CLIENT_CONNECT: 'ClientConnect',
+    CHUNK_REQUEST: 'ChunkRequest',
+    PLAYER_POSITION: 'PlayerPosition',
 
     // Server -> Client
     WORLD_DATA: 'WorldData',
     BLOCK_UPDATE: 'BlockUpdate',
+    CHUNK_DATA: 'ChunkData',
 
     // Bidirectional
     DISCONNECT: 'Disconnect'

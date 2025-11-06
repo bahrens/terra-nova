@@ -35,11 +35,13 @@ public class WebSocketServer
 
         try
         {
-            // Send world data immediately after connection
-            await SendWorldDataAsync(client);
+            // Wait for chunk requests instead of sending all world data
+            _logger.LogInformation("Waiting for chunk requests from WebSocket client");
 
-            // Receive messages
+            // Receive messages (handle multi-frame messages)
+            var messageBuffer = new List<byte>();
             var buffer = new byte[4096];
+
             while (webSocket.State == WebSocketState.Open)
             {
                 var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
@@ -52,8 +54,16 @@ public class WebSocketServer
 
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
-                    var messageJson = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                    await HandleMessageAsync(client, messageJson);
+                    // Accumulate message fragments
+                    messageBuffer.AddRange(buffer.Take(result.Count));
+
+                    // Only process when we have the complete message
+                    if (result.EndOfMessage)
+                    {
+                        var messageJson = Encoding.UTF8.GetString(messageBuffer.ToArray());
+                        await HandleMessageAsync(client, messageJson);
+                        messageBuffer.Clear();
+                    }
                 }
             }
         }
@@ -91,6 +101,21 @@ public class WebSocketServer
                     _logger.LogInformation("Player joined: {PlayerName}", playerName);
                     break;
 
+                case "ChunkRequest":
+                    var chunkPositions = root.GetProperty("chunkPositions");
+                    var chunks = new List<Vector2i>();
+
+                    foreach (var chunkPos in chunkPositions.EnumerateArray())
+                    {
+                        var chunkX = chunkPos.GetProperty("x").GetInt32();
+                        var chunkZ = chunkPos.GetProperty("z").GetInt32();
+                        chunks.Add(new Vector2i(chunkX, chunkZ));
+                    }
+
+                    // Send requested chunks
+                    await SendChunksAsync(client, chunks);
+                    break;
+
                 case "BlockUpdate":
                     var x = root.GetProperty("x").GetInt32();
                     var y = root.GetProperty("y").GetInt32();
@@ -114,6 +139,40 @@ public class WebSocketServer
         {
             _logger.LogError(ex, "Error handling WebSocket message: {Message}", messageJson);
         }
+    }
+
+    private async Task SendChunksAsync(WebSocketClient client, List<Vector2i> chunkPositions)
+    {
+        foreach (var chunkPos in chunkPositions)
+        {
+            var blocks = _gameServer.GetChunkBlocks(chunkPos);
+
+            var message = new
+            {
+                type = "ChunkData",
+                chunkX = chunkPos.X,
+                chunkZ = chunkPos.Z,
+                blocks = blocks.Select(b => new
+                {
+                    x = b.X,
+                    y = b.Y,
+                    z = b.Z,
+                    type = (byte)b.Type
+                }).ToArray()
+            };
+
+            var json = JsonSerializer.Serialize(message);
+            var bytes = Encoding.UTF8.GetBytes(json);
+
+            await client.Socket.SendAsync(
+                new ArraySegment<byte>(bytes),
+                WebSocketMessageType.Text,
+                true,
+                CancellationToken.None
+            );
+        }
+
+        _logger.LogInformation("Sent {ChunkCount} chunks to WebSocket client", chunkPositions.Count);
     }
 
     private async Task SendWorldDataAsync(WebSocketClient client)

@@ -384,6 +384,21 @@ window.terraNovaRenderer = (function() {
         }
     }
 
+    /**
+     * Get current camera position
+     * @returns {{x: number, y: number, z: number}} Camera position
+     */
+    function getCameraPosition() {
+        if (camera) {
+            return {
+                x: camera.position.x,
+                y: camera.position.y,
+                z: camera.position.z
+            };
+        }
+        return { x: 0, y: 25, z: 50 }; // Default spawn position
+    }
+
     // Expose public API
     return {
         init: init,
@@ -391,7 +406,8 @@ window.terraNovaRenderer = (function() {
         updateChunk: updateChunk,
         removeChunk: removeChunk,
         setCamera: setCamera,
-        highlightBlock: highlightBlock
+        highlightBlock: highlightBlock,
+        getCameraPosition: getCameraPosition
     };
 })();
 
