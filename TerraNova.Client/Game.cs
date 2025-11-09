@@ -105,7 +105,7 @@ public class Game : GameWindow
         _logger.LogInformation("Line width range: {Min} - {Max}", lineWidthRange[0], lineWidthRange[1]);
 
         _logger.LogInformation("Terra Nova initialized!");
-        _logger.LogInformation("Controls: WASD to move, Space/Shift for up/down, Mouse to look, ESC to exit");
+        _logger.LogInformation("Controls: WASD to move, Space/Shift for up/down, Mouse to look, F11 for fullscreen, ESC to exit");
     }
 
     /// <summary>
@@ -131,6 +131,21 @@ public class Game : GameWindow
         if (KeyboardState.IsKeyDown(Keys.Escape))
         {
             Close();
+        }
+
+        // Toggle fullscreen with F11
+        if (KeyboardState.IsKeyPressed(Keys.F11))
+        {
+            if (WindowState == WindowState.Fullscreen)
+            {
+                WindowState = WindowState.Normal;
+                _logger.LogInformation("Switched to windowed mode");
+            }
+            else
+            {
+                WindowState = WindowState.Fullscreen;
+                _logger.LogInformation("Switched to fullscreen mode");
+            }
         }
 
         // Camera keyboard controls
