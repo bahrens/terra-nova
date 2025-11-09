@@ -9,8 +9,12 @@ public enum BlockType
     Grass,      // Grass block
     Dirt,       // Dirt block
     Stone,      // Stone block
-    Wood,       // Wood block
-    Sand        // Sand block
+    Wood,       // Wood block (log)
+    Sand,       // Sand block
+    Planks,     // Wooden planks
+    Gravel,     // Gravel block
+    Glass,      // Glass block
+    Leaves      // Leaf block
 }
 
 /// <summary>
@@ -29,8 +33,12 @@ public static class BlockHelper
             BlockType.Grass => (0.4f, 0.65f, 0.35f),    // Darker grass green
             BlockType.Dirt => (0.55f, 0.42f, 0.30f),    // Minecraft brown
             BlockType.Stone => (0.6f, 0.6f, 0.6f),      // Lighter neutral gray
-            BlockType.Wood => (0.6f, 0.3f, 0.1f),       // Dark brown
+            BlockType.Wood => (0.6f, 0.3f, 0.1f),       // Dark brown (log)
             BlockType.Sand => (0.9f, 0.9f, 0.6f),       // Yellow-ish
+            BlockType.Planks => (0.72f, 0.52f, 0.32f),  // Lighter brown (wooden planks)
+            BlockType.Gravel => (0.53f, 0.53f, 0.53f),  // Medium gray
+            BlockType.Glass => (0.7f, 0.9f, 1.0f),      // Light blue (transparent later)
+            BlockType.Leaves => (0.2f, 0.6f, 0.2f),     // Dark green
             _ => (1.0f, 1.0f, 1.0f)                     // White (default)
         };
     }

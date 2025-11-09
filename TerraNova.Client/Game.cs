@@ -26,6 +26,7 @@ public class Game : GameWindow
     private readonly CameraSettings _cameraSettings;
     private readonly ILogger<Game> _logger;
     private Crosshair _crosshair = null!;
+    private Hotbar _hotbar = null!;
 
     // New architecture: GameEngine + OpenTKRenderer
     private World _world = null!;
@@ -36,6 +37,22 @@ public class Game : GameWindow
     private double _fpsUpdateTimer = 0.0;
     private int _frameCount = 0;
     private double _fps = 0.0;
+
+    // Hotbar selection
+    private int _selectedHotbarSlot = 0; // 0-8 for slots 1-9
+    private readonly BlockType[] _hotbarBlocks = new BlockType[9]
+    {
+        BlockType.Grass,   // Slot 1
+        BlockType.Dirt,    // Slot 2
+        BlockType.Stone,   // Slot 3
+        BlockType.Wood,    // Slot 4
+        BlockType.Planks,  // Slot 5
+        BlockType.Sand,    // Slot 6
+        BlockType.Gravel,  // Slot 7
+        BlockType.Glass,   // Slot 8
+        BlockType.Leaves   // Slot 9
+    };
+    private BlockType SelectedBlockType => _hotbarBlocks[_selectedHotbarSlot];
 
     public Game(
         IOptions<GameSettings> gameSettings,
@@ -93,6 +110,9 @@ public class Game : GameWindow
         _crosshair = new Crosshair();
         _crosshair.Initialize(ClientSize.X, ClientSize.Y);
 
+        _hotbar = new Hotbar(_hotbarBlocks);
+        _hotbar.Initialize(ClientSize.X, ClientSize.Y, _selectedHotbarSlot);
+
         // Connect to server using configured settings
         _networkClient.Connect(_networkSettings.ServerHost, _networkSettings.ServerPort, _networkSettings.PlayerName);
         _logger.LogInformation("Connecting to {Host}:{Port}...", _networkSettings.ServerHost, _networkSettings.ServerPort);
@@ -146,6 +166,24 @@ public class Game : GameWindow
                 WindowState = WindowState.Fullscreen;
                 _logger.LogInformation("Switched to fullscreen mode");
             }
+        }
+
+        // Hotbar selection (keys 1-9)
+        int previousSlot = _selectedHotbarSlot;
+        if (KeyboardState.IsKeyPressed(Keys.D1)) _selectedHotbarSlot = 0;
+        if (KeyboardState.IsKeyPressed(Keys.D2)) _selectedHotbarSlot = 1;
+        if (KeyboardState.IsKeyPressed(Keys.D3)) _selectedHotbarSlot = 2;
+        if (KeyboardState.IsKeyPressed(Keys.D4)) _selectedHotbarSlot = 3;
+        if (KeyboardState.IsKeyPressed(Keys.D5)) _selectedHotbarSlot = 4;
+        if (KeyboardState.IsKeyPressed(Keys.D6)) _selectedHotbarSlot = 5;
+        if (KeyboardState.IsKeyPressed(Keys.D7)) _selectedHotbarSlot = 6;
+        if (KeyboardState.IsKeyPressed(Keys.D8)) _selectedHotbarSlot = 7;
+        if (KeyboardState.IsKeyPressed(Keys.D9)) _selectedHotbarSlot = 8;
+
+        // Update hotbar if selection changed
+        if (_selectedHotbarSlot != previousSlot)
+        {
+            _hotbar.UpdateSelectedSlot(_selectedHotbarSlot);
         }
 
         // Camera keyboard controls
@@ -251,11 +289,11 @@ public class Game : GameWindow
                 // Calculate position to place the block (adjacent to hit face)
                 TerraNova.Shared.Vector3i placePos = GetAdjacentBlockPosition(hit.BlockPosition, hit.HitFace);
 
-                _logger.LogInformation("Placing block at ({X},{Y},{Z})",
-                    placePos.X, placePos.Y, placePos.Z);
+                _logger.LogInformation("Placing {BlockType} at ({X},{Y},{Z})",
+                    SelectedBlockType, placePos.X, placePos.Y, placePos.Z);
 
-                // Send update to server (place a Grass block for now)
-                _networkClient.SendBlockUpdate(placePos.X, placePos.Y, placePos.Z, BlockType.Grass);
+                // Send update to server with the selected block type
+                _networkClient.SendBlockUpdate(placePos.X, placePos.Y, placePos.Z, SelectedBlockType);
             }
         }
     }
@@ -313,9 +351,10 @@ public class Game : GameWindow
             _renderer.Render(ClientSize.X, ClientSize.Y);
         }
 
-        // Draw crosshair on top of everything
+        // Draw UI overlays on top of everything
         float aspectRatio = (float)ClientSize.X / ClientSize.Y;
         _crosshair.Draw(aspectRatio);
+        _hotbar.Draw();
 
         // Swap the front and back buffers (double buffering)
         SwapBuffers();
@@ -332,8 +371,9 @@ public class Game : GameWindow
         // Update the OpenGL viewport to match the new window size
         GL.Viewport(0, 0, args.Width, args.Height);
 
-        // Update crosshair for new window dimensions
+        // Update UI overlays for new window dimensions
         _crosshair?.OnResize(args.Width, args.Height);
+        _hotbar?.OnResize(args.Width, args.Height);
     }
 
     /// <summary>
@@ -370,6 +410,7 @@ public class Game : GameWindow
         _networkClient?.Disconnect();
         _renderer?.Dispose();
         _crosshair?.Dispose();
+        _hotbar?.Dispose();
 
         _logger.LogInformation("Terra Nova shutting down...");
     }
