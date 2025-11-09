@@ -47,17 +47,28 @@ public class GameServer : IGameServer, INetEventListener
     {
         _logger.LogInformation("Generating procedural terrain...");
 
+        // Validate configuration consistency
+        int maxTerrainHeight = _worldSettings.TerrainBaseHeight + (int)_worldSettings.TerrainHeightMultiplier;
+        if (_worldSettings.WorldSizeY < maxTerrainHeight)
+        {
+            _logger.LogWarning(
+                "WorldSizeY ({WorldSizeY}) is less than maximum terrain height ({MaxHeight}). " +
+                "Terrain will be clamped, resulting in flat areas. " +
+                "Consider increasing WorldSizeY to at least {RecommendedHeight}.",
+                _worldSettings.WorldSizeY, maxTerrainHeight, maxTerrainHeight + 10);
+        }
+
         // Calculate world bounds from center
         int halfX = _worldSettings.WorldSizeX / 2;
         int halfZ = _worldSettings.WorldSizeZ / 2;
 
-        // Simplex noise parameters for terrain generation
-        float scale = 0.02f;  // Controls terrain "smoothness" - lower = smoother/larger features
-        float heightMultiplier = 50.0f;  // How tall the hills/valleys are
-        int baseHeight = 20;  // Minimum terrain height
+        // Simplex noise parameters for terrain generation (from configuration)
+        float scale = _worldSettings.TerrainScale;
+        float heightMultiplier = _worldSettings.TerrainHeightMultiplier;
+        int baseHeight = _worldSettings.TerrainBaseHeight;
 
-        // Use a fixed seed for consistent terrain generation
-        SimplexNoise.Noise.Seed = 12345;
+        // Use configured seed for consistent terrain generation
+        SimplexNoise.Noise.Seed = _worldSettings.TerrainSeed;
 
         int blocksGenerated = 0;
 

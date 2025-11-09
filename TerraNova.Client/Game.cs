@@ -75,8 +75,8 @@ public class Game : GameWindow
         GL.Enable(EnableCap.CullFace);
         GL.CullFace(TriangleFace.Back);
 
-        // Initialize camera with configured settings (start above and outside the world)
-        _camera = new Camera(new OpenTKVector3(0.0f, 75.0f, 50.0f))
+        // Initialize camera with configured settings (spawn position from config)
+        _camera = new Camera(new OpenTKVector3(_cameraSettings.SpawnX, _cameraSettings.SpawnY, _cameraSettings.SpawnZ))
         {
             Speed = _cameraSettings.MovementSpeed,
             Sensitivity = _cameraSettings.MouseSensitivity,
