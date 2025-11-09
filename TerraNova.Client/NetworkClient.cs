@@ -22,6 +22,7 @@ public class NetworkClient : INetworkClient, INetEventListener
     public bool WorldChanged { get; set; }
 
     public event Action<Vector2i, BlockData[]>? OnChunkReceived;
+    public event Action<int, int, int, BlockType>? OnBlockUpdate;
 
     public NetworkClient(ILogger<NetworkClient> logger)
     {
@@ -125,7 +126,7 @@ public class NetworkClient : INetworkClient, INetEventListener
             case MessageType.BlockUpdate:
                 var blockUpdate = reader.GetBlockUpdateMessage();
                 _world?.SetBlock(blockUpdate.X, blockUpdate.Y, blockUpdate.Z, blockUpdate.NewType);
-                WorldChanged = true; // Flag that meshes need to be regenerated
+                OnBlockUpdate?.Invoke(blockUpdate.X, blockUpdate.Y, blockUpdate.Z, blockUpdate.NewType);
                 _logger.LogInformation("Block updated at ({X},{Y},{Z})", blockUpdate.X, blockUpdate.Y, blockUpdate.Z);
                 break;
         }

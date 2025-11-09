@@ -56,4 +56,9 @@ public interface INetworkClient
     /// Callback when a chunk is received from the server
     /// </summary>
     event Action<Vector2i, BlockData[]>? OnChunkReceived;
+
+    /// <summary>
+    /// Callback when a block is updated
+    /// </summary>
+    event Action<int, int, int, BlockType>? OnBlockUpdate;
 }

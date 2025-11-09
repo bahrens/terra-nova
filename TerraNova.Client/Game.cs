@@ -175,6 +175,12 @@ public class Game : GameWindow
                 _gameEngine.NotifyChunkReceived(chunkPos);
             };
 
+            _networkClient.OnBlockUpdate += (x, y, z, blockType) =>
+            {
+                _logger.LogInformation("Block update received at ({X},{Y},{Z}) -> {Type}", x, y, z, blockType);
+                _gameEngine.NotifyBlockUpdate(x, y, z, blockType);
+            };
+
             // Now set the world (this creates ChunkLoader with the callback)
             _gameEngine.SetWorld(_world);
 
@@ -192,13 +198,6 @@ public class Game : GameWindow
         if (_networkClient.WorldReceived && _networkClient.World != null && _gameEngine != null)
         {
             HandleBlockInteraction();
-
-            // Notify GameEngine if world changed
-            if (_networkClient.WorldChanged)
-            {
-                _gameEngine.SetWorld(_networkClient.World);
-                _networkClient.WorldChanged = false;
-            }
         }
 
         // Update GameEngine (regenerates meshes if needed)

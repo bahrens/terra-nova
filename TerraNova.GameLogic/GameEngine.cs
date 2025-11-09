@@ -6,12 +6,13 @@ namespace TerraNova.GameLogic;
 /// Platform-agnostic game engine that manages the game loop, world state, and rendering.
 /// This is the single source of truth for game logic - both desktop and web clients use this.
 /// </summary>
-public class GameEngine
+public class GameEngine : IDisposable
 {
     private readonly IRenderer _renderer;
     private World? _world;
     private readonly HashSet<Vector2i> _dirtyChunks = new();
     private ChunkLoader? _chunkLoader;
+    private AsyncChunkMeshBuilder? _meshBuilder;
 
     /// <summary>
     /// Callback for requesting chunks from server.
@@ -39,6 +40,9 @@ public class GameEngine
         // Initialize ChunkLoader for dynamic chunk loading
         _chunkLoader = new ChunkLoader(_world);
         _chunkLoader.OnChunkRequestNeeded = OnChunkRequestNeeded;
+
+        // Initialize AsyncChunkMeshBuilder
+        _meshBuilder = new AsyncChunkMeshBuilder(_world);
 
         // Mark all chunks as dirty when world is loaded
         _dirtyChunks.Clear();
@@ -98,27 +102,25 @@ public class GameEngine
     /// </summary>
     public void Update(double deltaTime)
     {
-        // If there are dirty chunks, regenerate only those chunk meshes
-        if (_dirtyChunks.Count > 0 && _world != null)
+        // If there are dirty chunks, enqueue them for mesh building
+        if (_dirtyChunks.Count > 0 && _world != null && _meshBuilder != null)
         {
-            RegenerateDirtyChunkMeshes();
+            foreach (var chunkPos in _dirtyChunks)
+            {
+                _meshBuilder.EnqueueChunk(chunkPos);
+            }
             _dirtyChunks.Clear();
+        }
+
+        // Always process completed meshes (they may be ready from previous frames)
+        if (_meshBuilder != null)
+        {
+            _meshBuilder.ProcessCompletedMeshes(_renderer);
         }
     }
 
-    private void RegenerateDirtyChunkMeshes()
+    public void Dispose()
     {
-        if (_world == null) return;
-
-        // Build and send meshes only for dirty chunks
-        foreach (var chunkPos in _dirtyChunks)
-        {
-            var chunk = _world.GetChunk(chunkPos);
-            if (chunk != null)
-            {
-                var meshData = ChunkMeshBuilder.BuildChunkMesh(chunk, _world);
-                _renderer.UpdateChunk(chunk.ChunkPosition, meshData);
-            }
-        }
+        _meshBuilder?.Dispose();
     }
 }
