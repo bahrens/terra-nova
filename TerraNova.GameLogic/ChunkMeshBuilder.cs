@@ -16,6 +16,7 @@ public static class ChunkMeshBuilder
         var vertices = new List<float>();
         var colors = new List<float>();
         var texCoords = new List<float>();
+        var brightness = new List<float>();
         var indices = new List<uint>();
         uint vertexCount = 0;
 
@@ -44,7 +45,8 @@ public static class ChunkMeshBuilder
                         worldPos.X, worldPos.Y, worldPos.Z,
                         color.r, color.g, color.b,
                         visibleFaces,
-                        vertices, colors, texCoords, indices,
+                        world,
+                        vertices, colors, texCoords, brightness, indices,
                         vertexCount);
                 }
             }
@@ -54,6 +56,7 @@ public static class ChunkMeshBuilder
             vertices.ToArray(),
             colors.ToArray(),
             texCoords.ToArray(),
+            brightness.ToArray(),
             indices.ToArray()
         );
     }
@@ -66,22 +69,26 @@ public static class ChunkMeshBuilder
         var vertices = new List<float>();
         var colors = new List<float>();
         var texCoords = new List<float>();
+        var brightness = new List<float>();
         var indices = new List<uint>();
         uint vertexCount = 0;
 
         var color = BlockHelper.GetBlockColor(blockType);
 
+        // No world context for single block, use simple directional lighting
         vertexCount = AddBlockFaces(
             blockPos.X, blockPos.Y, blockPos.Z,
             color.r, color.g, color.b,
             visibleFaces,
-            vertices, colors, texCoords, indices,
+            null, // No world context for highlighted block
+            vertices, colors, texCoords, brightness, indices,
             vertexCount);
 
         return new ChunkMeshData(
             vertices.ToArray(),
             colors.ToArray(),
             texCoords.ToArray(),
+            brightness.ToArray(),
             indices.ToArray()
         );
     }
@@ -93,11 +100,12 @@ public static class ChunkMeshBuilder
         float posX, float posY, float posZ,
         float r, float g, float b,
         BlockFaces visibleFaces,
-        List<float> vertices, List<float> colors, List<float> texCoords, List<uint> indices,
+        World? world,
+        List<float> vertices, List<float> colors, List<float> texCoords, List<float> brightness, List<uint> indices,
         uint vertexCount)
     {
         // Helper to add a face's vertices and indices
-        uint AddFace(float[] positions, float[] uvs, uint currentVertexCount)
+        uint AddFace(float[] positions, float[] uvs, float faceBrightness, uint currentVertexCount)
         {
             // Add position vertices (3 floats per vertex, 4 vertices per face = 12 floats)
             foreach (float v in positions)
@@ -119,6 +127,12 @@ public static class ChunkMeshBuilder
                 texCoords.Add(uv);
             }
 
+            // Add brightness (1 float per vertex, 4 vertices per face = 4 floats)
+            for (int i = 0; i < 4; i++)
+            {
+                brightness.Add(faceBrightness);
+            }
+
             // Add indices (2 triangles per face = 6 indices)
             indices.AddRange(new uint[] {
                 currentVertexCount + 0, currentVertexCount + 1, currentVertexCount + 2,
@@ -128,7 +142,7 @@ public static class ChunkMeshBuilder
             return currentVertexCount + 4;
         }
 
-        // Front face (+Z)
+        // Front face (+Z) - Side face
         if ((visibleFaces & BlockFaces.Front) != 0)
         {
             vertexCount = AddFace(
@@ -139,11 +153,12 @@ public static class ChunkMeshBuilder
                     posX - 0.5f, posY + 0.5f, posZ + 0.5f,
                 },
                 new float[] { 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f },
+                RenderSettings.Lighting.SideFaceBrightness,
                 vertexCount
             );
         }
 
-        // Back face (-Z)
+        // Back face (-Z) - Side face
         if ((visibleFaces & BlockFaces.Back) != 0)
         {
             vertexCount = AddFace(
@@ -154,11 +169,12 @@ public static class ChunkMeshBuilder
                     posX + 0.5f, posY + 0.5f, posZ - 0.5f,
                 },
                 new float[] { 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f },
+                RenderSettings.Lighting.SideFaceBrightness,
                 vertexCount
             );
         }
 
-        // Right face (+X)
+        // Right face (+X) - Side face
         if ((visibleFaces & BlockFaces.Right) != 0)
         {
             vertexCount = AddFace(
@@ -169,11 +185,12 @@ public static class ChunkMeshBuilder
                     posX + 0.5f, posY + 0.5f, posZ + 0.5f,
                 },
                 new float[] { 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f },
+                RenderSettings.Lighting.SideFaceBrightness,
                 vertexCount
             );
         }
 
-        // Left face (-X)
+        // Left face (-X) - Side face
         if ((visibleFaces & BlockFaces.Left) != 0)
         {
             vertexCount = AddFace(
@@ -184,11 +201,12 @@ public static class ChunkMeshBuilder
                     posX - 0.5f, posY + 0.5f, posZ - 0.5f,
                 },
                 new float[] { 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f },
+                RenderSettings.Lighting.SideFaceBrightness,
                 vertexCount
             );
         }
 
-        // Top face (+Y)
+        // Top face (+Y) - Brightest (facing sun)
         if ((visibleFaces & BlockFaces.Top) != 0)
         {
             vertexCount = AddFace(
@@ -199,11 +217,12 @@ public static class ChunkMeshBuilder
                     posX - 0.5f, posY + 0.5f, posZ - 0.5f,
                 },
                 new float[] { 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f },
+                RenderSettings.Lighting.TopFaceBrightness,
                 vertexCount
             );
         }
 
-        // Bottom face (-Y)
+        // Bottom face (-Y) - Darkest (no direct light)
         if ((visibleFaces & BlockFaces.Bottom) != 0)
         {
             vertexCount = AddFace(
@@ -214,6 +233,7 @@ public static class ChunkMeshBuilder
                     posX - 0.5f, posY - 0.5f, posZ + 0.5f,
                 },
                 new float[] { 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f },
+                RenderSettings.Lighting.BottomFaceBrightness,
                 vertexCount
             );
         }

@@ -34,16 +34,16 @@ public class ChunkMesh : IDisposable
         }
 
         // Convert ChunkMeshData (separate arrays) to interleaved format
-        // Format: position(3) + texCoord(2) + color(3) = 8 floats per vertex
+        // Format: position(3) + texCoord(2) + color(3) + brightness(1) = 9 floats per vertex
         int vertexCount = meshData.Vertices.Length / 3;
-        float[] interleavedData = new float[vertexCount * 8];
+        float[] interleavedData = new float[vertexCount * 9];
 
         for (int i = 0; i < vertexCount; i++)
         {
             int srcVertIdx = i * 3;
             int srcTexIdx = i * 2;
             int srcColorIdx = i * 3;
-            int dstIdx = i * 8;
+            int dstIdx = i * 9;
 
             // Position (3 floats)
             interleavedData[dstIdx + 0] = meshData.Vertices[srcVertIdx + 0];
@@ -58,6 +58,9 @@ public class ChunkMesh : IDisposable
             interleavedData[dstIdx + 5] = meshData.Colors[srcColorIdx + 0];
             interleavedData[dstIdx + 6] = meshData.Colors[srcColorIdx + 1];
             interleavedData[dstIdx + 7] = meshData.Colors[srcColorIdx + 2];
+
+            // Brightness (1 float)
+            interleavedData[dstIdx + 8] = meshData.Brightness[i];
         }
 
         // Create and bind VAO (stores the vertex attribute configuration)
@@ -76,8 +79,8 @@ public class ChunkMesh : IDisposable
         GL.BufferData(BufferTarget.ElementArrayBuffer, meshData.Indices.Length * sizeof(uint),
                       meshData.Indices, BufferUsageHint.StaticDraw);
 
-        // Configure vertex attributes (stride is 8 floats per vertex)
-        int stride = 8 * sizeof(float);
+        // Configure vertex attributes (stride is 9 floats per vertex)
+        int stride = 9 * sizeof(float);
 
         // Position attribute (location = 0, 3 floats, offset = 0)
         GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, stride, 0);
@@ -90,6 +93,10 @@ public class ChunkMesh : IDisposable
         // Color attribute (location = 2, 3 floats, offset = 5 floats)
         GL.VertexAttribPointer(2, 3, VertexAttribPointerType.Float, false, stride, 5 * sizeof(float));
         GL.EnableVertexAttribArray(2);
+
+        // Brightness attribute (location = 3, 1 float, offset = 8 floats)
+        GL.VertexAttribPointer(3, 1, VertexAttribPointerType.Float, false, stride, 8 * sizeof(float));
+        GL.EnableVertexAttribArray(3);
 
         // Unbind
         GL.BindVertexArray(0);
