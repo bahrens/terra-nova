@@ -19,7 +19,6 @@ public class NetworkClient : INetworkClient, INetEventListener
     public bool IsConnected => _serverPeer != null && _serverPeer.ConnectionState == ConnectionState.Connected;
     public bool WorldReceived => _worldReceived;
     public World? World => _world;
-    public bool WorldChanged { get; set; }
 
     public event Action<Vector2i, BlockData[]>? OnChunkReceived;
     public event Action<int, int, int, BlockType>? OnBlockUpdate;
@@ -171,7 +170,6 @@ public class NetworkClient : INetworkClient, INetEventListener
         }
 
         _worldReceived = true;
-        WorldChanged = true;
         _logger.LogInformation("World loaded from server!");
     }
 

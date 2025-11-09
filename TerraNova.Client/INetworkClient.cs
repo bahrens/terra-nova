@@ -23,11 +23,6 @@ public interface INetworkClient
     World? World { get; }
 
     /// <summary>
-    /// Whether the world has changed and needs mesh regeneration
-    /// </summary>
-    bool WorldChanged { get; set; }
-
-    /// <summary>
     /// Connect to a game server
     /// </summary>
     void Connect(string host, int port, string playerName);
