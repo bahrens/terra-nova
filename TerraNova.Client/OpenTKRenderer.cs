@@ -60,32 +60,8 @@ public class OpenTKRenderer : IRenderer, IDisposable
             _chunkMeshes.Remove(chunkPos);
         }
 
-        // Create chunk column object and fill it with blocks from the world
-        var chunk = new Chunk(chunkPos);
-
-        // Populate the chunk column with blocks from the world
-        // Chunks are now columns that span the full world height
-        int chunkWorldX = chunkPos.X * Chunk.ChunkSize;
-        int chunkWorldZ = chunkPos.Z * Chunk.ChunkSize;
-
-        for (int x = 0; x < Chunk.ChunkSize; x++)
-        {
-            for (int y = 0; y < Chunk.WorldHeight; y++)  // Full world height
-            {
-                for (int z = 0; z < Chunk.ChunkSize; z++)
-                {
-                    int worldX = chunkWorldX + x;
-                    int worldY = y;  // Y is absolute in column chunks
-                    int worldZ = chunkWorldZ + z;
-
-                    BlockType blockType = _world.GetBlock(worldX, worldY, worldZ);
-                    chunk.SetBlock(x, y, z, blockType);
-                }
-            }
-        }
-
-        // Create the mesh from the populated chunk
-        var chunkMesh = new ChunkMesh(chunk, _world);
+        // Create OpenGL mesh from the pre-generated ChunkMeshData
+        var chunkMesh = new ChunkMesh(meshData);
         _chunkMeshes[chunkPos] = chunkMesh;
 
         return Task.CompletedTask;
@@ -161,11 +137,14 @@ public class OpenTKRenderer : IRenderer, IDisposable
                     _highlightedBlock.Value.Y,
                     _highlightedBlock.Value.Z);
 
-                // Create a temporary mesh for the selected block with bordered shader
-                using var selectedBlockMesh = new CubeMesh(
-                    new OpenTKVector3(_highlightedBlock.Value.X, _highlightedBlock.Value.Y, _highlightedBlock.Value.Z),
+                // Generate mesh data using ChunkMeshBuilder
+                var meshData = ChunkMeshBuilder.BuildSingleBlockMesh(
+                    _highlightedBlock.Value,
                     selectedBlockType,
                     visibleFaces);
+
+                // Create a temporary mesh for the selected block with bordered shader
+                using var selectedBlockMesh = new CubeMesh(meshData);
 
                 // Enable polygon offset to prevent z-fighting with the chunk mesh
                 GL.Enable(EnableCap.PolygonOffsetFill);

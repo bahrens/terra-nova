@@ -1,13 +1,11 @@
 using OpenTK.Graphics.OpenGL4;
-using OpenTK.Mathematics;
-using TerraNova.Shared;
-using OpenTKVector3 = OpenTK.Mathematics.Vector3;
+using TerraNova.GameLogic;
 
 namespace TerraNova;
 
 /// <summary>
-/// Generates and manages a single mesh for an entire chunk (16x16x16 blocks)
-/// This is the key optimization: one draw call per chunk instead of per block
+/// Manages OpenGL buffers for a chunk mesh (VAO/VBO/EBO).
+/// Takes pre-generated ChunkMeshData from ChunkMeshBuilder.
 /// </summary>
 public class ChunkMesh : IDisposable
 {
@@ -17,61 +15,49 @@ public class ChunkMesh : IDisposable
     private int _indexCount;
     private bool _disposed = false;
 
-    public Chunk Chunk { get; private set; }
-
-    public ChunkMesh(Chunk chunk, World world)
+    public ChunkMesh(ChunkMeshData meshData)
     {
-        Chunk = chunk;
-        GenerateMesh(world);
+        GenerateMesh(meshData);
     }
 
     /// <summary>
-    /// Generates a single combined mesh for all blocks in the chunk
+    /// Creates OpenGL buffers from platform-agnostic ChunkMeshData
     /// </summary>
-    private void GenerateMesh(World world)
+    private void GenerateMesh(ChunkMeshData meshData)
     {
-        var vertexList = new List<float>();
-        var indexList = new List<uint>();
-        uint vertexCount = 0;
-
-        // Iterate through all blocks in this chunk
-        for (int x = 0; x < Chunk.ChunkSize; x++)
-        {
-            for (int y = 0; y < Chunk.ChunkSize; y++)
-            {
-                for (int z = 0; z < Chunk.ChunkSize; z++)
-                {
-                    BlockType blockType = Chunk.GetBlock(x, y, z);
-                    if (blockType == BlockType.Air)
-                        continue;
-
-                    // Get world position for this block
-                    TerraNova.Shared.Vector3i worldPos = Chunk.GetWorldPosition(x, y, z);
-                    OpenTKVector3 pos = new OpenTKVector3(worldPos.X, worldPos.Y, worldPos.Z);
-
-                    // Get block color
-                    var color = BlockHelper.GetBlockColor(blockType);
-                    float r = color.r, g = color.g, b = color.b;
-
-                    // Determine which faces are visible
-                    BlockFaces visibleFaces = world.GetVisibleFaces(worldPos.X, worldPos.Y, worldPos.Z);
-
-                    // Add faces to the combined mesh
-                    AddBlockFaces(pos, r, g, b, visibleFaces, vertexList, indexList, ref vertexCount);
-                }
-            }
-        }
-
-        // Convert lists to arrays
-        float[] vertices = vertexList.ToArray();
-        uint[] indices = indexList.ToArray();
-
-        _indexCount = indices.Length;
+        _indexCount = meshData.Indices.Length;
 
         // Early exit if no faces to render (empty chunk)
         if (_indexCount == 0)
         {
             return;
+        }
+
+        // Convert ChunkMeshData (separate arrays) to interleaved format
+        // Format: position(3) + texCoord(2) + color(3) = 8 floats per vertex
+        int vertexCount = meshData.Vertices.Length / 3;
+        float[] interleavedData = new float[vertexCount * 8];
+
+        for (int i = 0; i < vertexCount; i++)
+        {
+            int srcVertIdx = i * 3;
+            int srcTexIdx = i * 2;
+            int srcColorIdx = i * 3;
+            int dstIdx = i * 8;
+
+            // Position (3 floats)
+            interleavedData[dstIdx + 0] = meshData.Vertices[srcVertIdx + 0];
+            interleavedData[dstIdx + 1] = meshData.Vertices[srcVertIdx + 1];
+            interleavedData[dstIdx + 2] = meshData.Vertices[srcVertIdx + 2];
+
+            // TexCoords (2 floats)
+            interleavedData[dstIdx + 3] = meshData.TexCoords[srcTexIdx + 0];
+            interleavedData[dstIdx + 4] = meshData.TexCoords[srcTexIdx + 1];
+
+            // Color (3 floats)
+            interleavedData[dstIdx + 5] = meshData.Colors[srcColorIdx + 0];
+            interleavedData[dstIdx + 6] = meshData.Colors[srcColorIdx + 1];
+            interleavedData[dstIdx + 7] = meshData.Colors[srcColorIdx + 2];
         }
 
         // Create and bind VAO (stores the vertex attribute configuration)
@@ -81,14 +67,14 @@ public class ChunkMesh : IDisposable
         // Create and upload VBO (vertex data)
         _vbo = GL.GenBuffer();
         GL.BindBuffer(BufferTarget.ArrayBuffer, _vbo);
-        GL.BufferData(BufferTarget.ArrayBuffer, vertices.Length * sizeof(float),
-                      vertices, BufferUsageHint.StaticDraw);
+        GL.BufferData(BufferTarget.ArrayBuffer, interleavedData.Length * sizeof(float),
+                      interleavedData, BufferUsageHint.StaticDraw);
 
         // Create and upload EBO (index data)
         _ebo = GL.GenBuffer();
         GL.BindBuffer(BufferTarget.ElementArrayBuffer, _ebo);
-        GL.BufferData(BufferTarget.ElementArrayBuffer, indices.Length * sizeof(uint),
-                      indices, BufferUsageHint.StaticDraw);
+        GL.BufferData(BufferTarget.ElementArrayBuffer, meshData.Indices.Length * sizeof(uint),
+                      meshData.Indices, BufferUsageHint.StaticDraw);
 
         // Configure vertex attributes (stride is 8 floats per vertex)
         int stride = 8 * sizeof(float);
@@ -107,97 +93,6 @@ public class ChunkMesh : IDisposable
 
         // Unbind
         GL.BindVertexArray(0);
-    }
-
-    /// <summary>
-    /// Adds all visible faces of a single block to the mesh
-    /// </summary>
-    private void AddBlockFaces(OpenTKVector3 pos, float r, float g, float b, BlockFaces visibleFaces,
-                               List<float> vertexList, List<uint> indexList, ref uint vertexCount)
-    {
-        // Helper to add a face's vertices and indices
-        void AddFace(float[] faceVertices, ref uint currentVertexCount)
-        {
-            // Add vertices (each face has 4 vertices * 8 floats = 32 floats)
-            foreach (float v in faceVertices)
-            {
-                vertexList.Add(v);
-            }
-
-            // Add indices (2 triangles per face)
-            indexList.AddRange(new uint[] {
-                currentVertexCount + 0, currentVertexCount + 1, currentVertexCount + 2,
-                currentVertexCount + 2, currentVertexCount + 3, currentVertexCount + 0
-            });
-
-            currentVertexCount += 4;
-        }
-
-        // Front face (+Z)
-        if ((visibleFaces & BlockFaces.Front) != 0)
-        {
-            AddFace(new float[] {
-                pos.X - 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  0.0f, 0.0f,  r, g, b,
-                pos.X + 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  1.0f, 0.0f,  r, g, b,
-                pos.X + 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  1.0f, 1.0f,  r, g, b,
-                pos.X - 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  0.0f, 1.0f,  r, g, b,
-            }, ref vertexCount);
-        }
-
-        // Back face (-Z)
-        if ((visibleFaces & BlockFaces.Back) != 0)
-        {
-            AddFace(new float[] {
-                pos.X + 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  0.0f, 0.0f,  r, g, b,
-                pos.X - 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  1.0f, 0.0f,  r, g, b,
-                pos.X - 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  1.0f, 1.0f,  r, g, b,
-                pos.X + 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  0.0f, 1.0f,  r, g, b,
-            }, ref vertexCount);
-        }
-
-        // Right face (+X)
-        if ((visibleFaces & BlockFaces.Right) != 0)
-        {
-            AddFace(new float[] {
-                pos.X + 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  0.0f, 0.0f,  r, g, b,
-                pos.X + 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  1.0f, 0.0f,  r, g, b,
-                pos.X + 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  1.0f, 1.0f,  r, g, b,
-                pos.X + 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  0.0f, 1.0f,  r, g, b,
-            }, ref vertexCount);
-        }
-
-        // Left face (-X)
-        if ((visibleFaces & BlockFaces.Left) != 0)
-        {
-            AddFace(new float[] {
-                pos.X - 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  0.0f, 0.0f,  r, g, b,
-                pos.X - 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  1.0f, 0.0f,  r, g, b,
-                pos.X - 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  1.0f, 1.0f,  r, g, b,
-                pos.X - 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  0.0f, 1.0f,  r, g, b,
-            }, ref vertexCount);
-        }
-
-        // Top face (+Y)
-        if ((visibleFaces & BlockFaces.Top) != 0)
-        {
-            AddFace(new float[] {
-                pos.X - 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  0.0f, 0.0f,  r, g, b,
-                pos.X + 0.5f, pos.Y + 0.5f, pos.Z + 0.5f,  1.0f, 0.0f,  r, g, b,
-                pos.X + 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  1.0f, 1.0f,  r, g, b,
-                pos.X - 0.5f, pos.Y + 0.5f, pos.Z - 0.5f,  0.0f, 1.0f,  r, g, b,
-            }, ref vertexCount);
-        }
-
-        // Bottom face (-Y)
-        if ((visibleFaces & BlockFaces.Bottom) != 0)
-        {
-            AddFace(new float[] {
-                pos.X - 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  0.0f, 0.0f,  r, g, b,
-                pos.X + 0.5f, pos.Y - 0.5f, pos.Z - 0.5f,  1.0f, 0.0f,  r, g, b,
-                pos.X + 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  1.0f, 1.0f,  r, g, b,
-                pos.X - 0.5f, pos.Y - 0.5f, pos.Z + 0.5f,  0.0f, 1.0f,  r, g, b,
-            }, ref vertexCount);
-        }
     }
 
     /// <summary>
