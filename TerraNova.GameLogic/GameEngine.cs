@@ -95,6 +95,13 @@ public class GameEngine : IDisposable
     {
         _chunkLoader?.MarkChunkLoaded(chunkPos);
         _dirtyChunks.Add(chunkPos);
+
+        // Mark all 4 neighboring chunks as dirty so they rebuild their meshes
+        // with proper face culling now that this chunk has loaded
+        _dirtyChunks.Add(new Vector2i(chunkPos.X - 1, chunkPos.Z)); // West
+        _dirtyChunks.Add(new Vector2i(chunkPos.X + 1, chunkPos.Z)); // East
+        _dirtyChunks.Add(new Vector2i(chunkPos.X, chunkPos.Z - 1)); // South
+        _dirtyChunks.Add(new Vector2i(chunkPos.X, chunkPos.Z + 1)); // North
     }
 
     /// <summary>
