@@ -65,7 +65,7 @@ public class World
             // Iterate through all blocks in this chunk
             for (int x = 0; x < Chunk.ChunkSize; x++)
             {
-                for (int y = 0; y < Chunk.ChunkSize; y++)
+                for (int y = 0; y < Chunk.WorldHeight; y++)
                 {
                     for (int z = 0; z < Chunk.ChunkSize; z++)
                     {
