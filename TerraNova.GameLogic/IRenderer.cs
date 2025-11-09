@@ -19,11 +19,6 @@ public interface IRenderer
     void RemoveChunk(Vector2i chunkPos);
 
     /// <summary>
-    /// Update the camera position and rotation
-    /// </summary>
-    void SetCamera(Vector3 position, Vector3 rotation);
-
-    /// <summary>
     /// Highlight a block at the specified position (for selection)
     /// </summary>
     void HighlightBlock(Vector3i blockPos, bool highlight);

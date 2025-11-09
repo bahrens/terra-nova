@@ -104,15 +104,6 @@ public class OpenTKRenderer : IRenderer, IDisposable
     }
 
     /// <summary>
-    /// Update camera position and rotation for rendering
-    /// </summary>
-    public void SetCamera(SharedVector3 position, SharedVector3 rotation)
-    {
-        // Note: This method is part of the IRenderer interface but not actively used
-        // since we use SetCameraReference() instead for the OpenTK client
-    }
-
-    /// <summary>
     /// Set the camera reference (called by Game.cs)
     /// </summary>
     public void SetCameraReference(Camera camera)
