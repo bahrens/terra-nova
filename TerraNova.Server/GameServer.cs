@@ -53,8 +53,8 @@ public class GameServer : IGameServer, INetEventListener
 
         // Simplex noise parameters for terrain generation
         float scale = 0.05f;  // Controls terrain "smoothness" - lower = smoother/larger features
-        float heightMultiplier = 8.0f;  // How tall the hills/valleys are
-        int baseHeight = 4;  // Minimum terrain height
+        float heightMultiplier = 35.0f;  // How tall the hills/valleys are
+        int baseHeight = 20;  // Minimum terrain height
 
         // Use a fixed seed for consistent terrain generation
         SimplexNoise.Noise.Seed = 12345;
