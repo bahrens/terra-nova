@@ -52,8 +52,8 @@ public class GameServer : IGameServer, INetEventListener
         int halfZ = _worldSettings.WorldSizeZ / 2;
 
         // Simplex noise parameters for terrain generation
-        float scale = 0.05f;  // Controls terrain "smoothness" - lower = smoother/larger features
-        float heightMultiplier = 35.0f;  // How tall the hills/valleys are
+        float scale = 0.02f;  // Controls terrain "smoothness" - lower = smoother/larger features
+        float heightMultiplier = 50.0f;  // How tall the hills/valleys are
         int baseHeight = 20;  // Minimum terrain height
 
         // Use a fixed seed for consistent terrain generation

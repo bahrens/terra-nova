@@ -76,7 +76,7 @@ public class Game : GameWindow
         GL.CullFace(TriangleFace.Back);
 
         // Initialize camera with configured settings (start above and outside the world)
-        _camera = new Camera(new OpenTKVector3(0.0f, 25.0f, 50.0f))
+        _camera = new Camera(new OpenTKVector3(0.0f, 75.0f, 50.0f))
         {
             Speed = _cameraSettings.MovementSpeed,
             Sensitivity = _cameraSettings.MouseSensitivity,
