@@ -15,11 +15,9 @@ namespace TerraNova;
 /// </summary>
 public class OpenTKRenderer : IRenderer, IDisposable
 {
-    private readonly Dictionary<SharedVector2i, ChunkMeshData> _chunkMeshDataCache = new();
     private readonly Dictionary<SharedVector2i, ChunkMesh> _chunkMeshes = new();
     private readonly World _world;
     private Camera? _camera;
-    private OpenTKVector3 _cameraRotation;
     private SharedVector3i? _highlightedBlock;
 
     private Shader _shader = null!;
@@ -55,9 +53,6 @@ public class OpenTKRenderer : IRenderer, IDisposable
     /// </summary>
     public Task UpdateChunk(SharedVector2i chunkPos, ChunkMeshData meshData)
     {
-        // Cache the mesh data
-        _chunkMeshDataCache[chunkPos] = meshData;
-
         // Remove existing mesh if present
         if (_chunkMeshes.TryGetValue(chunkPos, out var existingMesh))
         {
@@ -106,8 +101,6 @@ public class OpenTKRenderer : IRenderer, IDisposable
             mesh.Dispose();
             _chunkMeshes.Remove(chunkPos);
         }
-
-        _chunkMeshDataCache.Remove(chunkPos);
     }
 
     /// <summary>
@@ -115,9 +108,8 @@ public class OpenTKRenderer : IRenderer, IDisposable
     /// </summary>
     public void SetCamera(SharedVector3 position, SharedVector3 rotation)
     {
-        // Note: We'll need to update this to use the camera properly
-        // For now, we store the rotation for later use
-        _cameraRotation = new OpenTKVector3(rotation.X, rotation.Y, rotation.Z);
+        // Note: This method is part of the IRenderer interface but not actively used
+        // since we use SetCameraReference() instead for the OpenTK client
     }
 
     /// <summary>

@@ -175,35 +175,6 @@ public class WebSocketServer
         _logger.LogInformation("Sent {ChunkCount} chunks to WebSocket client", chunkPositions.Count);
     }
 
-    private async Task SendWorldDataAsync(WebSocketClient client)
-    {
-        var blocks = _gameServer.GetAllBlocks();
-
-        var message = new
-        {
-            type = "WorldData",
-            blocks = blocks.Select(b => new
-            {
-                x = b.position.X,
-                y = b.position.Y,
-                z = b.position.Z,
-                type = (byte)b.blockType
-            }).ToArray()
-        };
-
-        var json = JsonSerializer.Serialize(message);
-        var bytes = Encoding.UTF8.GetBytes(json);
-
-        await client.Socket.SendAsync(
-            new ArraySegment<byte>(bytes),
-            WebSocketMessageType.Text,
-            true,
-            CancellationToken.None
-        );
-
-        _logger.LogInformation("Sent {BlockCount} blocks to WebSocket client", blocks.Length);
-    }
-
     public async Task BroadcastBlockUpdateToWebSocketClients(int x, int y, int z, BlockType blockType)
     {
         var message = new

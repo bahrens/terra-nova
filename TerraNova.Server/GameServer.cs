@@ -231,25 +231,6 @@ public class GameServer : IGameServer, INetEventListener
         request.Accept();
     }
 
-    private void SendWorldData(NetPeer peer)
-    {
-        // Convert World blocks to BlockData array
-        var blocks = _world.GetAllBlocks()
-            .Select(b => new BlockData(b.position.X, b.position.Y, b.position.Z, b.blockType))
-            .ToArray();
-
-        var worldDataMsg = new WorldDataMessage(blocks);
-
-        // Send to client
-        var writer = new NetDataWriter();
-        writer.Put((byte)MessageType.WorldData);
-        writer.Put(worldDataMsg);
-
-        peer.Send(writer, DeliveryMethod.ReliableOrdered);
-
-        _logger.LogInformation("Sent {BlockCount} blocks to client {Address}", blocks.Length, peer.Address);
-    }
-
     private void BroadcastBlockUpdate(BlockUpdateMessage blockUpdate)
     {
         var writer = new NetDataWriter();

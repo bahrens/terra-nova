@@ -21,11 +21,6 @@ public class Chunk
     /// </summary>
     private readonly BlockType[,,] _blocks;
 
-    /// <summary>
-    /// Tracks if this chunk has been modified since last mesh generation
-    /// </summary>
-    public bool IsDirty { get; set; }
-
     public Chunk(Vector2i chunkPosition)
     {
         ChunkPosition = chunkPosition;
@@ -42,8 +37,6 @@ public class Chunk
                 }
             }
         }
-
-        IsDirty = true;
     }
 
     /// <summary>
@@ -66,7 +59,6 @@ public class Chunk
             return;
 
         _blocks[localX, localY, localZ] = blockType;
-        IsDirty = true;
     }
 
     /// <summary>
