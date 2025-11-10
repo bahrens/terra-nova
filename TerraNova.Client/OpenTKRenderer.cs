@@ -20,6 +20,11 @@ public class OpenTKRenderer : IRenderer, IDisposable
     private Camera? _camera;
     private SharedVector3i? _highlightedBlock;
 
+    // Chunk cleanup constants
+    private const int ChunkUnloadDistance = 12; // Chunks beyond this distance (in chunks) from camera will be unloaded
+    private double _cleanupTimer = 0.0;
+    private const double ChunkCleanupInterval = 2.0; // Run cleanup every N seconds
+
     private Shader _shader = null!;
     private Shader _borderedShader = null!;
     private Texture _grassTexture = null!;
@@ -76,6 +81,63 @@ public class OpenTKRenderer : IRenderer, IDisposable
         {
             mesh.Dispose();
             _chunkMeshes.Remove(chunkPos);
+        }
+    }
+
+    /// <summary>
+    /// Update renderer state and periodically clean up distant chunks
+    /// </summary>
+    public void Update(double deltaTime)
+    {
+        _cleanupTimer += deltaTime;
+        if (_cleanupTimer >= ChunkCleanupInterval)
+        {
+            _cleanupTimer = 0.0;
+            CleanupDistantChunks();
+        }
+    }
+
+    /// <summary>
+    /// Removes chunk meshes that are far from the camera
+    /// </summary>
+    private void CleanupDistantChunks()
+    {
+        if (_camera == null)
+            return;
+
+        // Calculate camera's chunk position
+        var cameraPos = _camera.Position.ToShared();
+        int cameraChunkX = (int)Math.Floor(cameraPos.X / Chunk.ChunkSize);
+        int cameraChunkZ = (int)Math.Floor(cameraPos.Z / Chunk.ChunkSize);
+
+        // Find chunks to unload
+        var chunksToUnload = new List<SharedVector2i>();
+        foreach (var chunkPos in _chunkMeshes.Keys)
+        {
+            // Calculate distance in chunks (Chebyshev distance)
+            int distanceX = Math.Abs(chunkPos.X - cameraChunkX);
+            int distanceZ = Math.Abs(chunkPos.Z - cameraChunkZ);
+            int chunkDistance = Math.Max(distanceX, distanceZ);
+
+            if (chunkDistance > ChunkUnloadDistance)
+            {
+                chunksToUnload.Add(chunkPos);
+            }
+        }
+
+        // Unload distant chunk meshes and chunk data
+        foreach (var chunkPos in chunksToUnload)
+        {
+            // Remove mesh from GPU
+            RemoveChunk(chunkPos);
+
+            // Also remove chunk data from World to free memory
+            _world.RemoveChunk(chunkPos);
+        }
+
+        if (chunksToUnload.Count > 0)
+        {
+            Console.WriteLine($"Unloaded {chunksToUnload.Count} distant chunks (meshes + data). Total meshes: {_chunkMeshes.Count}, Total world chunks: {_world.GetChunkCount()}");
         }
     }
 

@@ -120,6 +120,22 @@ public class World
     }
 
     /// <summary>
+    /// Removes a chunk from memory at the given position
+    /// </summary>
+    public bool RemoveChunk(Vector2i chunkPosition)
+    {
+        return _chunks.Remove(chunkPosition);
+    }
+
+    /// <summary>
+    /// Gets the total number of loaded chunks
+    /// </summary>
+    public int GetChunkCount()
+    {
+        return _chunks.Count;
+    }
+
+    /// <summary>
     /// Checks which faces of a block should be rendered (face culling)
     /// Returns a flags enum indicating which faces are visible
     /// </summary>

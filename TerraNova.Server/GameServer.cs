@@ -24,6 +24,11 @@ public class GameServer : IGameServer, INetEventListener
     // Track each client's state (loaded chunks, position)
     private readonly Dictionary<NetPeer, ClientState> _clientStates = new();
 
+    // Chunk management constants
+    private const int ChunkUnloadDistance = 12; // Chunks beyond this distance (in chunks) from all players will be unloaded
+    private const int ChunkCleanupInterval = 100; // Run cleanup every N updates (roughly every 2 seconds at 50 tick/sec)
+    private int _updateCounter = 0;
+
     /// <summary>
     /// Per-client state tracking for chunk streaming
     /// </summary>
@@ -82,6 +87,14 @@ public class GameServer : IGameServer, INetEventListener
     {
         // Poll network events
         _netManager.PollEvents();
+
+        // Periodically clean up chunks that are far from all players
+        _updateCounter++;
+        if (_updateCounter >= ChunkCleanupInterval)
+        {
+            _updateCounter = 0;
+            CleanupDistantChunks();
+        }
     }
 
     public void Stop()
@@ -301,5 +314,73 @@ public class GameServer : IGameServer, INetEventListener
         writer.Put(chunkDataMsg);
 
         peer.Send(writer, DeliveryMethod.ReliableOrdered);
+    }
+
+    /// <summary>
+    /// Removes chunks from memory that are far from all connected players
+    /// </summary>
+    private void CleanupDistantChunks()
+    {
+        // If no clients connected, no cleanup needed
+        if (_clientStates.Count == 0)
+            return;
+
+        // Get all chunks currently loaded
+        var loadedChunks = _world.GetAllChunks().ToList();
+        var chunksToUnload = new List<Vector2i>();
+
+        foreach (var chunk in loadedChunks)
+        {
+            var chunkPos = chunk.ChunkPosition;
+            bool isNearAnyPlayer = false;
+
+            // Check if this chunk is near any connected player
+            foreach (var clientState in _clientStates.Values)
+            {
+                if (clientState.PlayerPosition == null)
+                    continue;
+
+                // Calculate player's chunk position
+                var playerPos = clientState.PlayerPosition.Value;
+                int playerChunkX = (int)Math.Floor(playerPos.X / Chunk.ChunkSize);
+                int playerChunkZ = (int)Math.Floor(playerPos.Z / Chunk.ChunkSize);
+
+                // Calculate distance in chunks (Manhattan distance)
+                int distanceX = Math.Abs(chunkPos.X - playerChunkX);
+                int distanceZ = Math.Abs(chunkPos.Z - playerChunkZ);
+                int chunkDistance = Math.Max(distanceX, distanceZ);
+
+                if (chunkDistance <= ChunkUnloadDistance)
+                {
+                    isNearAnyPlayer = true;
+                    break;
+                }
+            }
+
+            // If chunk is not near any player, mark for unloading
+            if (!isNearAnyPlayer)
+            {
+                chunksToUnload.Add(chunkPos);
+            }
+        }
+
+        // Unload distant chunks
+        if (chunksToUnload.Count > 0)
+        {
+            foreach (var chunkPos in chunksToUnload)
+            {
+                // Remove from world
+                _world.RemoveChunk(chunkPos);
+
+                // Remove from all client's loaded chunks tracking
+                foreach (var clientState in _clientStates.Values)
+                {
+                    clientState.LoadedChunks.Remove(chunkPos);
+                }
+            }
+
+            _logger.LogInformation("Unloaded {Count} distant chunks. Total chunks in memory: {Total}",
+                chunksToUnload.Count, _world.GetChunkCount());
+        }
     }
 }

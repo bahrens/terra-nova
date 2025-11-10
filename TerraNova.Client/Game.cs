@@ -258,6 +258,12 @@ public class Game : GameWindow
         {
             _gameEngine.Update(deltaTime);
         }
+
+        // Update renderer (for periodic chunk cleanup)
+        if (_renderer != null)
+        {
+            _renderer.Update(args.Time);
+        }
     }
 
     private void HandleBlockInteraction()
