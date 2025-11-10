@@ -18,6 +18,7 @@ public class GameServer : IGameServer, INetEventListener
     private readonly ServerSettings _serverSettings;
     private readonly WorldSettings _worldSettings;
     private readonly ILogger<GameServer> _logger;
+    private readonly TerrainGenerator _terrainGenerator;
     private WebSocketServer? _webSocketServer;
 
     // Track each client's state (loaded chunks, position)
@@ -40,52 +41,16 @@ public class GameServer : IGameServer, INetEventListener
         _netManager = new NetManager(this);
         _world = new World();
 
-        // Generate initial world using configured dimensions
-        InitializeWorld();
-    }
-
-    private void InitializeWorld()
-    {
-        _logger.LogInformation("Generating procedural terrain with multi-octave noise, caves, and ores...");
-
-        // Validate configuration consistency
-        int maxTerrainHeight = _worldSettings.TerrainBaseHeight + (int)_worldSettings.TerrainHeightMultiplier;
-        if (_worldSettings.WorldSizeY < maxTerrainHeight)
-        {
-            _logger.LogWarning(
-                "WorldSizeY ({WorldSizeY}) is less than maximum terrain height ({MaxHeight}). " +
-                "Terrain will be clamped, resulting in flat areas. " +
-                "Consider increasing WorldSizeY to at least {RecommendedHeight}.",
-                _worldSettings.WorldSizeY, maxTerrainHeight, maxTerrainHeight + 10);
-        }
-
-        // Create terrain generator with configured settings
-        var terrainGenerator = new TerrainGenerator(
+        // Create terrain generator for on-demand chunk generation
+        _terrainGenerator = new TerrainGenerator(
             _worldSettings.TerrainSeed,
             _worldSettings.TerrainBaseHeight,
             _worldSettings.TerrainHeightMultiplier,
             _worldSettings.TerrainScale);
 
-        // Calculate world bounds from center
-        int halfX = _worldSettings.WorldSizeX / 2;
-        int halfZ = _worldSettings.WorldSizeZ / 2;
-
-        // Generate terrain column by column
-        for (int x = -halfX; x <= halfX; x++)
-        {
-            for (int z = -halfZ; z <= halfZ; z++)
-            {
-                terrainGenerator.GenerateColumn(_world, x, z, _worldSettings.WorldSizeY);
-            }
-        }
-
-        // Count total blocks for logging
-        int blocksGenerated = _world.GetAllBlocks().Count();
-
-        _logger.LogInformation(
-            "Procedural terrain generated: {BlockCount} blocks with natural variation, caves, and ores",
-            blocksGenerated);
+        _logger.LogInformation("Infinite world generation enabled - chunks will generate on demand");
     }
+
 
     // Public methods for WebSocket server
     public (Vector3i position, BlockType blockType)[] GetAllBlocks()
@@ -231,6 +196,34 @@ public class GameServer : IGameServer, INetEventListener
     }
 
     /// <summary>
+    /// Generates a chunk on-demand if it doesn't exist yet
+    /// </summary>
+    private void GenerateChunkIfNeeded(Vector2i chunkPos)
+    {
+        // Check if chunk already exists
+        if (_world.HasChunk(chunkPos))
+            return;
+
+        // Get or create empty chunk
+        var chunk = _world.GetOrCreateChunk(chunkPos);
+
+        // Calculate world coordinates for this chunk
+        int chunkWorldX = chunkPos.X * Chunk.ChunkSize;
+        int chunkWorldZ = chunkPos.Z * Chunk.ChunkSize;
+
+        // Generate terrain for all columns in this chunk
+        for (int x = 0; x < Chunk.ChunkSize; x++)
+        {
+            for (int z = 0; z < Chunk.ChunkSize; z++)
+            {
+                int worldX = chunkWorldX + x;
+                int worldZ = chunkWorldZ + z;
+                _terrainGenerator.GenerateColumn(_world, worldX, worldZ, _worldSettings.WorldSizeY);
+            }
+        }
+    }
+
+    /// <summary>
     /// Handle chunk request from a client - send requested chunks
     /// </summary>
     private void HandleChunkRequest(NetPeer peer, ChunkRequestMessage request)
@@ -243,6 +236,9 @@ public class GameServer : IGameServer, INetEventListener
             // Skip if client already has this chunk
             if (clientState.LoadedChunks.Contains(chunkPos))
                 continue;
+
+            // Generate chunk on-demand if it doesn't exist yet
+            GenerateChunkIfNeeded(chunkPos);
 
             // Get blocks in this chunk column from the world
             var chunkBlocks = GetChunkBlocks(chunkPos);

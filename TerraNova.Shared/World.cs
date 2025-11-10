@@ -99,6 +99,27 @@ public class World
     }
 
     /// <summary>
+    /// Checks if a chunk exists at the given position
+    /// </summary>
+    public bool HasChunk(Vector2i chunkPosition)
+    {
+        return _chunks.ContainsKey(chunkPosition);
+    }
+
+    /// <summary>
+    /// Gets or creates a chunk at the given position
+    /// </summary>
+    public Chunk GetOrCreateChunk(Vector2i chunkPosition)
+    {
+        if (!_chunks.TryGetValue(chunkPosition, out var chunk))
+        {
+            chunk = new Chunk(chunkPosition);
+            _chunks[chunkPosition] = chunk;
+        }
+        return chunk;
+    }
+
+    /// <summary>
     /// Checks which faces of a block should be rendered (face culling)
     /// Returns a flags enum indicating which faces are visible
     /// </summary>
