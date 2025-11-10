@@ -24,26 +24,9 @@ public class Crosshair : IDisposable
 
     private void InitializeInternal()
     {
-        // Create shader for 2D rendering in pixel coordinates
-        string vertexShaderSource = @"
-#version 330 core
-layout (location = 0) in vec2 aPosition;
-
-void main()
-{
-    gl_Position = vec4(aPosition, 0.0, 1.0);
-}
-";
-
-        string fragmentShaderSource = @"
-#version 330 core
-out vec4 FragColor;
-
-void main()
-{
-    FragColor = vec4(1.0, 1.0, 1.0, 0.8); // White with slight transparency
-}
-";
+        // Load shaders from files
+        string vertexShaderSource = File.ReadAllText("Shaders/ui.vert");
+        string fragmentShaderSource = File.ReadAllText("Shaders/ui.frag");
 
         _shader = new Shader(vertexShaderSource, fragmentShaderSource);
 

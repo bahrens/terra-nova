@@ -34,41 +34,12 @@ public class Hotbar : IDisposable
 
     private void InitializeShaders()
     {
-        // Shader for borders (white)
-        string vertexShaderSource = @"
-#version 330 core
-layout (location = 0) in vec2 aPosition;
-
-void main()
-{
-    gl_Position = vec4(aPosition, 0.0, 1.0);
-}
-";
-
-        string fragmentShaderSource = @"
-#version 330 core
-out vec4 FragColor;
-
-void main()
-{
-    FragColor = vec4(1.0, 1.0, 1.0, 0.9); // White border
-}
-";
+        // Load shaders from files
+        string vertexShaderSource = File.ReadAllText("Shaders/ui.vert");
+        string fragmentShaderSource = File.ReadAllText("Shaders/ui_hotbar.frag");
+        string coloredFragmentShaderSource = File.ReadAllText("Shaders/ui_colored.frag");
 
         _shader = new Shader(vertexShaderSource, fragmentShaderSource);
-
-        // Shader for colored blocks (with color uniform)
-        string coloredFragmentShaderSource = @"
-#version 330 core
-uniform vec3 uColor;
-out vec4 FragColor;
-
-void main()
-{
-    FragColor = vec4(uColor, 1.0);
-}
-";
-
         _coloredShader = new Shader(vertexShaderSource, coloredFragmentShaderSource);
     }
 
