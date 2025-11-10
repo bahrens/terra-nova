@@ -161,7 +161,46 @@ public static class ChunkMeshBuilder
         if ((visibleFaces & BlockFaces.Front) != 0)
         {
             float baseBrightness = RenderSettings.Lighting.SideFaceBrightness;
-            float[] vertexBrightness = new float[] { baseBrightness, baseBrightness, baseBrightness, baseBrightness };
+            int x = (int)posX;
+            int y = (int)posY;
+            int z = (int)posZ;
+
+            float[] vertexBrightness = new float[4];
+            if (world != null)
+            {
+                // Vertex 0: bottom-left (-X,-Y,+Z)
+                bool v0_left = world.GetBlock(x - 1, y, z + 1) != BlockType.Air;
+                bool v0_bottom = world.GetBlock(x, y - 1, z + 1) != BlockType.Air;
+                bool v0_corner = world.GetBlock(x - 1, y - 1, z + 1) != BlockType.Air;
+                float ao0 = CalculateAO(v0_left, v0_bottom, v0_corner);
+                vertexBrightness[0] = baseBrightness * (1.0f - (1.0f - ao0) * RenderSettings.Lighting.AmbientOcclusionStrength);
+
+                // Vertex 1: bottom-right (+X,-Y,+Z)
+                bool v1_right = world.GetBlock(x + 1, y, z + 1) != BlockType.Air;
+                bool v1_bottom = world.GetBlock(x, y - 1, z + 1) != BlockType.Air;
+                bool v1_corner = world.GetBlock(x + 1, y - 1, z + 1) != BlockType.Air;
+                float ao1 = CalculateAO(v1_right, v1_bottom, v1_corner);
+                vertexBrightness[1] = baseBrightness * (1.0f - (1.0f - ao1) * RenderSettings.Lighting.AmbientOcclusionStrength);
+
+                // Vertex 2: top-right (+X,+Y,+Z)
+                bool v2_right = world.GetBlock(x + 1, y, z + 1) != BlockType.Air;
+                bool v2_top = world.GetBlock(x, y + 1, z + 1) != BlockType.Air;
+                bool v2_corner = world.GetBlock(x + 1, y + 1, z + 1) != BlockType.Air;
+                float ao2 = CalculateAO(v2_right, v2_top, v2_corner);
+                vertexBrightness[2] = baseBrightness * (1.0f - (1.0f - ao2) * RenderSettings.Lighting.AmbientOcclusionStrength);
+
+                // Vertex 3: top-left (-X,+Y,+Z)
+                bool v3_left = world.GetBlock(x - 1, y, z + 1) != BlockType.Air;
+                bool v3_top = world.GetBlock(x, y + 1, z + 1) != BlockType.Air;
+                bool v3_corner = world.GetBlock(x - 1, y + 1, z + 1) != BlockType.Air;
+                float ao3 = CalculateAO(v3_left, v3_top, v3_corner);
+                vertexBrightness[3] = baseBrightness * (1.0f - (1.0f - ao3) * RenderSettings.Lighting.AmbientOcclusionStrength);
+            }
+            else
+            {
+                for (int i = 0; i < 4; i++)
+                    vertexBrightness[i] = baseBrightness;
+            }
 
             vertexCount = AddFace(
                 new float[] {
@@ -180,7 +219,46 @@ public static class ChunkMeshBuilder
         if ((visibleFaces & BlockFaces.Back) != 0)
         {
             float baseBrightness = RenderSettings.Lighting.SideFaceBrightness;
-            float[] vertexBrightness = new float[] { baseBrightness, baseBrightness, baseBrightness, baseBrightness };
+            int x = (int)posX;
+            int y = (int)posY;
+            int z = (int)posZ;
+
+            float[] vertexBrightness = new float[4];
+            if (world != null)
+            {
+                // Vertex 0: bottom-right (+X,-Y,-Z)
+                bool v0_right = world.GetBlock(x + 1, y, z - 1) != BlockType.Air;
+                bool v0_bottom = world.GetBlock(x, y - 1, z - 1) != BlockType.Air;
+                bool v0_corner = world.GetBlock(x + 1, y - 1, z - 1) != BlockType.Air;
+                float ao0 = CalculateAO(v0_right, v0_bottom, v0_corner);
+                vertexBrightness[0] = baseBrightness * (1.0f - (1.0f - ao0) * RenderSettings.Lighting.AmbientOcclusionStrength);
+
+                // Vertex 1: bottom-left (-X,-Y,-Z)
+                bool v1_left = world.GetBlock(x - 1, y, z - 1) != BlockType.Air;
+                bool v1_bottom = world.GetBlock(x, y - 1, z - 1) != BlockType.Air;
+                bool v1_corner = world.GetBlock(x - 1, y - 1, z - 1) != BlockType.Air;
+                float ao1 = CalculateAO(v1_left, v1_bottom, v1_corner);
+                vertexBrightness[1] = baseBrightness * (1.0f - (1.0f - ao1) * RenderSettings.Lighting.AmbientOcclusionStrength);
+
+                // Vertex 2: top-left (-X,+Y,-Z)
+                bool v2_left = world.GetBlock(x - 1, y, z - 1) != BlockType.Air;
+                bool v2_top = world.GetBlock(x, y + 1, z - 1) != BlockType.Air;
+                bool v2_corner = world.GetBlock(x - 1, y + 1, z - 1) != BlockType.Air;
+                float ao2 = CalculateAO(v2_left, v2_top, v2_corner);
+                vertexBrightness[2] = baseBrightness * (1.0f - (1.0f - ao2) * RenderSettings.Lighting.AmbientOcclusionStrength);
+
+                // Vertex 3: top-right (+X,+Y,-Z)
+                bool v3_right = world.GetBlock(x + 1, y, z - 1) != BlockType.Air;
+                bool v3_top = world.GetBlock(x, y + 1, z - 1) != BlockType.Air;
+                bool v3_corner = world.GetBlock(x + 1, y + 1, z - 1) != BlockType.Air;
+                float ao3 = CalculateAO(v3_right, v3_top, v3_corner);
+                vertexBrightness[3] = baseBrightness * (1.0f - (1.0f - ao3) * RenderSettings.Lighting.AmbientOcclusionStrength);
+            }
+            else
+            {
+                for (int i = 0; i < 4; i++)
+                    vertexBrightness[i] = baseBrightness;
+            }
 
             vertexCount = AddFace(
                 new float[] {
@@ -199,7 +277,46 @@ public static class ChunkMeshBuilder
         if ((visibleFaces & BlockFaces.Right) != 0)
         {
             float baseBrightness = RenderSettings.Lighting.SideFaceBrightness;
-            float[] vertexBrightness = new float[] { baseBrightness, baseBrightness, baseBrightness, baseBrightness };
+            int x = (int)posX;
+            int y = (int)posY;
+            int z = (int)posZ;
+
+            float[] vertexBrightness = new float[4];
+            if (world != null)
+            {
+                // Vertex 0: bottom-front (+X,-Y,+Z)
+                bool v0_bottom = world.GetBlock(x + 1, y - 1, z) != BlockType.Air;
+                bool v0_front = world.GetBlock(x + 1, y, z + 1) != BlockType.Air;
+                bool v0_corner = world.GetBlock(x + 1, y - 1, z + 1) != BlockType.Air;
+                float ao0 = CalculateAO(v0_bottom, v0_front, v0_corner);
+                vertexBrightness[0] = baseBrightness * (1.0f - (1.0f - ao0) * RenderSettings.Lighting.AmbientOcclusionStrength);
+
+                // Vertex 1: bottom-back (+X,-Y,-Z)
+                bool v1_bottom = world.GetBlock(x + 1, y - 1, z) != BlockType.Air;
+                bool v1_back = world.GetBlock(x + 1, y, z - 1) != BlockType.Air;
+                bool v1_corner = world.GetBlock(x + 1, y - 1, z - 1) != BlockType.Air;
+                float ao1 = CalculateAO(v1_bottom, v1_back, v1_corner);
+                vertexBrightness[1] = baseBrightness * (1.0f - (1.0f - ao1) * RenderSettings.Lighting.AmbientOcclusionStrength);
+
+                // Vertex 2: top-back (+X,+Y,-Z)
+                bool v2_top = world.GetBlock(x + 1, y + 1, z) != BlockType.Air;
+                bool v2_back = world.GetBlock(x + 1, y, z - 1) != BlockType.Air;
+                bool v2_corner = world.GetBlock(x + 1, y + 1, z - 1) != BlockType.Air;
+                float ao2 = CalculateAO(v2_top, v2_back, v2_corner);
+                vertexBrightness[2] = baseBrightness * (1.0f - (1.0f - ao2) * RenderSettings.Lighting.AmbientOcclusionStrength);
+
+                // Vertex 3: top-front (+X,+Y,+Z)
+                bool v3_top = world.GetBlock(x + 1, y + 1, z) != BlockType.Air;
+                bool v3_front = world.GetBlock(x + 1, y, z + 1) != BlockType.Air;
+                bool v3_corner = world.GetBlock(x + 1, y + 1, z + 1) != BlockType.Air;
+                float ao3 = CalculateAO(v3_top, v3_front, v3_corner);
+                vertexBrightness[3] = baseBrightness * (1.0f - (1.0f - ao3) * RenderSettings.Lighting.AmbientOcclusionStrength);
+            }
+            else
+            {
+                for (int i = 0; i < 4; i++)
+                    vertexBrightness[i] = baseBrightness;
+            }
 
             vertexCount = AddFace(
                 new float[] {
@@ -218,7 +335,46 @@ public static class ChunkMeshBuilder
         if ((visibleFaces & BlockFaces.Left) != 0)
         {
             float baseBrightness = RenderSettings.Lighting.SideFaceBrightness;
-            float[] vertexBrightness = new float[] { baseBrightness, baseBrightness, baseBrightness, baseBrightness };
+            int x = (int)posX;
+            int y = (int)posY;
+            int z = (int)posZ;
+
+            float[] vertexBrightness = new float[4];
+            if (world != null)
+            {
+                // Vertex 0: bottom-back (-X,-Y,-Z)
+                bool v0_bottom = world.GetBlock(x - 1, y - 1, z) != BlockType.Air;
+                bool v0_back = world.GetBlock(x - 1, y, z - 1) != BlockType.Air;
+                bool v0_corner = world.GetBlock(x - 1, y - 1, z - 1) != BlockType.Air;
+                float ao0 = CalculateAO(v0_bottom, v0_back, v0_corner);
+                vertexBrightness[0] = baseBrightness * (1.0f - (1.0f - ao0) * RenderSettings.Lighting.AmbientOcclusionStrength);
+
+                // Vertex 1: bottom-front (-X,-Y,+Z)
+                bool v1_bottom = world.GetBlock(x - 1, y - 1, z) != BlockType.Air;
+                bool v1_front = world.GetBlock(x - 1, y, z + 1) != BlockType.Air;
+                bool v1_corner = world.GetBlock(x - 1, y - 1, z + 1) != BlockType.Air;
+                float ao1 = CalculateAO(v1_bottom, v1_front, v1_corner);
+                vertexBrightness[1] = baseBrightness * (1.0f - (1.0f - ao1) * RenderSettings.Lighting.AmbientOcclusionStrength);
+
+                // Vertex 2: top-front (-X,+Y,+Z)
+                bool v2_top = world.GetBlock(x - 1, y + 1, z) != BlockType.Air;
+                bool v2_front = world.GetBlock(x - 1, y, z + 1) != BlockType.Air;
+                bool v2_corner = world.GetBlock(x - 1, y + 1, z + 1) != BlockType.Air;
+                float ao2 = CalculateAO(v2_top, v2_front, v2_corner);
+                vertexBrightness[2] = baseBrightness * (1.0f - (1.0f - ao2) * RenderSettings.Lighting.AmbientOcclusionStrength);
+
+                // Vertex 3: top-back (-X,+Y,-Z)
+                bool v3_top = world.GetBlock(x - 1, y + 1, z) != BlockType.Air;
+                bool v3_back = world.GetBlock(x - 1, y, z - 1) != BlockType.Air;
+                bool v3_corner = world.GetBlock(x - 1, y + 1, z - 1) != BlockType.Air;
+                float ao3 = CalculateAO(v3_top, v3_back, v3_corner);
+                vertexBrightness[3] = baseBrightness * (1.0f - (1.0f - ao3) * RenderSettings.Lighting.AmbientOcclusionStrength);
+            }
+            else
+            {
+                for (int i = 0; i < 4; i++)
+                    vertexBrightness[i] = baseBrightness;
+            }
 
             vertexCount = AddFace(
                 new float[] {
@@ -298,7 +454,46 @@ public static class ChunkMeshBuilder
         if ((visibleFaces & BlockFaces.Bottom) != 0)
         {
             float baseBrightness = RenderSettings.Lighting.BottomFaceBrightness;
-            float[] vertexBrightness = new float[] { baseBrightness, baseBrightness, baseBrightness, baseBrightness };
+            int x = (int)posX;
+            int y = (int)posY;
+            int z = (int)posZ;
+
+            float[] vertexBrightness = new float[4];
+            if (world != null)
+            {
+                // Vertex 0: back-left (-X,-Y,-Z)
+                bool v0_left = world.GetBlock(x - 1, y - 1, z) != BlockType.Air;
+                bool v0_back = world.GetBlock(x, y - 1, z - 1) != BlockType.Air;
+                bool v0_corner = world.GetBlock(x - 1, y - 1, z - 1) != BlockType.Air;
+                float ao0 = CalculateAO(v0_left, v0_back, v0_corner);
+                vertexBrightness[0] = baseBrightness * (1.0f - (1.0f - ao0) * RenderSettings.Lighting.AmbientOcclusionStrength);
+
+                // Vertex 1: back-right (+X,-Y,-Z)
+                bool v1_right = world.GetBlock(x + 1, y - 1, z) != BlockType.Air;
+                bool v1_back = world.GetBlock(x, y - 1, z - 1) != BlockType.Air;
+                bool v1_corner = world.GetBlock(x + 1, y - 1, z - 1) != BlockType.Air;
+                float ao1 = CalculateAO(v1_right, v1_back, v1_corner);
+                vertexBrightness[1] = baseBrightness * (1.0f - (1.0f - ao1) * RenderSettings.Lighting.AmbientOcclusionStrength);
+
+                // Vertex 2: front-right (+X,-Y,+Z)
+                bool v2_right = world.GetBlock(x + 1, y - 1, z) != BlockType.Air;
+                bool v2_front = world.GetBlock(x, y - 1, z + 1) != BlockType.Air;
+                bool v2_corner = world.GetBlock(x + 1, y - 1, z + 1) != BlockType.Air;
+                float ao2 = CalculateAO(v2_right, v2_front, v2_corner);
+                vertexBrightness[2] = baseBrightness * (1.0f - (1.0f - ao2) * RenderSettings.Lighting.AmbientOcclusionStrength);
+
+                // Vertex 3: front-left (-X,-Y,+Z)
+                bool v3_left = world.GetBlock(x - 1, y - 1, z) != BlockType.Air;
+                bool v3_front = world.GetBlock(x, y - 1, z + 1) != BlockType.Air;
+                bool v3_corner = world.GetBlock(x - 1, y - 1, z + 1) != BlockType.Air;
+                float ao3 = CalculateAO(v3_left, v3_front, v3_corner);
+                vertexBrightness[3] = baseBrightness * (1.0f - (1.0f - ao3) * RenderSettings.Lighting.AmbientOcclusionStrength);
+            }
+            else
+            {
+                for (int i = 0; i < 4; i++)
+                    vertexBrightness[i] = baseBrightness;
+            }
 
             vertexCount = AddFace(
                 new float[] {
