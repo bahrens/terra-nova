@@ -14,7 +14,11 @@ public enum BlockType
     Planks,     // Wooden planks
     Gravel,     // Gravel block
     Glass,      // Glass block
-    Leaves      // Leaf block
+    Leaves,     // Leaf block
+    CoalOre,    // Coal ore block
+    IronOre,    // Iron ore block
+    GoldOre,    // Gold ore block
+    DiamondOre  // Diamond ore block
 }
 
 /// <summary>
@@ -39,6 +43,10 @@ public static class BlockHelper
             BlockType.Gravel => (0.53f, 0.53f, 0.53f),  // Medium gray
             BlockType.Glass => (0.7f, 0.9f, 1.0f),      // Light blue (transparent later)
             BlockType.Leaves => (0.2f, 0.6f, 0.2f),     // Dark green
+            BlockType.CoalOre => (0.2f, 0.2f, 0.2f),    // Dark gray/black (coal)
+            BlockType.IronOre => (0.7f, 0.6f, 0.5f),    // Tan/beige (iron)
+            BlockType.GoldOre => (0.9f, 0.8f, 0.2f),    // Gold/yellow
+            BlockType.DiamondOre => (0.3f, 0.8f, 0.9f), // Cyan/light blue (diamond)
             _ => (1.0f, 1.0f, 1.0f)                     // White (default)
         };
     }

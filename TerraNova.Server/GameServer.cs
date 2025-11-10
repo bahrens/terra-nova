@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TerraNova.Server.Configuration;
 using TerraNova.Shared;
+using TerraNova.GameLogic;
 
 namespace TerraNova.Server;
 
@@ -45,7 +46,7 @@ public class GameServer : IGameServer, INetEventListener
 
     private void InitializeWorld()
     {
-        _logger.LogInformation("Generating procedural terrain...");
+        _logger.LogInformation("Generating procedural terrain with multi-octave noise, caves, and ores...");
 
         // Validate configuration consistency
         int maxTerrainHeight = _worldSettings.TerrainBaseHeight + (int)_worldSettings.TerrainHeightMultiplier;
@@ -58,63 +59,31 @@ public class GameServer : IGameServer, INetEventListener
                 _worldSettings.WorldSizeY, maxTerrainHeight, maxTerrainHeight + 10);
         }
 
+        // Create terrain generator with configured settings
+        var terrainGenerator = new TerrainGenerator(
+            _worldSettings.TerrainSeed,
+            _worldSettings.TerrainBaseHeight,
+            _worldSettings.TerrainHeightMultiplier,
+            _worldSettings.TerrainScale);
+
         // Calculate world bounds from center
         int halfX = _worldSettings.WorldSizeX / 2;
         int halfZ = _worldSettings.WorldSizeZ / 2;
 
-        // Simplex noise parameters for terrain generation (from configuration)
-        float scale = _worldSettings.TerrainScale;
-        float heightMultiplier = _worldSettings.TerrainHeightMultiplier;
-        int baseHeight = _worldSettings.TerrainBaseHeight;
-
-        // Use configured seed for consistent terrain generation
-        SimplexNoise.Noise.Seed = _worldSettings.TerrainSeed;
-
-        int blocksGenerated = 0;
-
-        // Generate terrain using height map
+        // Generate terrain column by column
         for (int x = -halfX; x <= halfX; x++)
         {
             for (int z = -halfZ; z <= halfZ; z++)
             {
-                // Sample Simplex noise to get terrain height at this X,Z position
-                // Noise returns value between 0 and 255
-                float noiseValue = (float)SimplexNoise.Noise.CalcPixel2D(x, z, scale);
-
-                // Convert noise (0-255) to height value
-                int terrainHeight = baseHeight + (int)((noiseValue / 255.0f) * heightMultiplier);
-
-                // Clamp height to world bounds
-                terrainHeight = Math.Min(terrainHeight, _worldSettings.WorldSizeY - 1);
-
-                // Fill column from y=0 up to terrain height with layered blocks
-                for (int y = 0; y <= terrainHeight; y++)
-                {
-                    BlockType blockType;
-
-                    // Top layer: grass
-                    if (y == terrainHeight)
-                    {
-                        blockType = BlockType.Grass;
-                    }
-                    // Next 3 layers: dirt
-                    else if (y >= terrainHeight - 3)
-                    {
-                        blockType = BlockType.Dirt;
-                    }
-                    // Everything below: stone
-                    else
-                    {
-                        blockType = BlockType.Stone;
-                    }
-
-                    _world.SetBlock(x, y, z, blockType);
-                    blocksGenerated++;
-                }
+                terrainGenerator.GenerateColumn(_world, x, z, _worldSettings.WorldSizeY);
             }
         }
 
-        _logger.LogInformation("Procedural terrain generated: {BlockCount} blocks with varied heights",
+        // Count total blocks for logging
+        int blocksGenerated = _world.GetAllBlocks().Count();
+
+        _logger.LogInformation(
+            "Procedural terrain generated: {BlockCount} blocks with natural variation, caves, and ores",
             blocksGenerated);
     }
 

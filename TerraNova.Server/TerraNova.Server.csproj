@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TerraNova.Shared\TerraNova.Shared.csproj" />
+    <ProjectReference Include="..\TerraNova.GameLogic\TerraNova.GameLogic.csproj" />
   </ItemGroup>
 
   <ItemGroup>
