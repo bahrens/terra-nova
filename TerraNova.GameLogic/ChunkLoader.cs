@@ -107,8 +107,7 @@ public class ChunkLoader
         foreach (var chunkPos in chunksToUnload)
         {
             _loadedChunks.Remove(chunkPos);
-            // Note: World.RemoveChunk would need to be implemented if we want to fully unload
-            // For now, we just stop tracking it
+            _world.RemoveChunk(chunkPos);
         }
     }
 
