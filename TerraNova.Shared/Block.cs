@@ -18,7 +18,8 @@ public enum BlockType
     CoalOre,    // Coal ore block
     IronOre,    // Iron ore block
     GoldOre,    // Gold ore block
-    DiamondOre  // Diamond ore block
+    DiamondOre, // Diamond ore block
+    Bedrock     // Indestructible bottom layer
 }
 
 /// <summary>
@@ -47,6 +48,7 @@ public static class BlockHelper
             BlockType.IronOre => (0.7f, 0.6f, 0.5f),    // Tan/beige (iron)
             BlockType.GoldOre => (0.9f, 0.8f, 0.2f),    // Gold/yellow
             BlockType.DiamondOre => (0.3f, 0.8f, 0.9f), // Cyan/light blue (diamond)
+            BlockType.Bedrock => (0.15f, 0.15f, 0.15f), // Very dark gray (indestructible)
             _ => (1.0f, 1.0f, 1.0f)                     // White (default)
         };
     }

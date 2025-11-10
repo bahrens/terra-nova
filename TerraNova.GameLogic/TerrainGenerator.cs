@@ -36,12 +36,15 @@ public class TerrainGenerator
     /// </summary>
     public void GenerateColumn(World world, int x, int z, int maxHeight)
     {
+        // Place bedrock layer at bottom (Y=0 is always bedrock)
+        world.SetBlock(x, 0, z, BlockType.Bedrock);
+
         // Calculate terrain height using multi-octave noise
         int terrainHeight = CalculateTerrainHeight(x, z);
         terrainHeight = Math.Min(terrainHeight, maxHeight - 1);
 
-        // Generate column from bottom to terrain height
-        for (int y = 0; y <= terrainHeight; y++)
+        // Generate column from Y=1 (above bedrock) to terrain height
+        for (int y = 1; y <= terrainHeight; y++)
         {
             // Check if this position should be a cave
             if (IsCave(x, y, z, terrainHeight))
