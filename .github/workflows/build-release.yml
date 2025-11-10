@@ -1,0 +1,146 @@
+name: Build Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Build Client (Windows)
+      run: dotnet publish TerraNova.Client/TerraNova.Client.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish/client-win
+
+    - name: Build Server (Windows)
+      run: dotnet publish TerraNova.Server/TerraNova.Server.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish/server-win
+
+    - name: Package Client (Windows)
+      run: |
+        cd publish/client-win
+        Compress-Archive -Path * -DestinationPath ../../TerraNova-Client-${{ inputs.version }}-win-x64.zip
+      shell: powershell
+
+    - name: Package Server (Windows)
+      run: |
+        cd publish/server-win
+        Compress-Archive -Path * -DestinationPath ../../TerraNova-Server-${{ inputs.version }}-win-x64.zip
+      shell: powershell
+
+    - name: Upload Windows Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-builds
+        path: |
+          TerraNova-Client-${{ inputs.version }}-win-x64.zip
+          TerraNova-Server-${{ inputs.version }}-win-x64.zip
+
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Build Client (Linux)
+      run: dotnet publish TerraNova.Client/TerraNova.Client.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish/client-linux
+
+    - name: Build Server (Linux)
+      run: dotnet publish TerraNova.Server/TerraNova.Server.csproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish/server-linux
+
+    - name: Package Client (Linux)
+      run: |
+        cd publish/client-linux
+        zip -r ../../TerraNova-Client-${{ inputs.version }}-linux-x64.zip .
+
+    - name: Package Server (Linux)
+      run: |
+        cd publish/server-linux
+        zip -r ../../TerraNova-Server-${{ inputs.version }}-linux-x64.zip .
+
+    - name: Upload Linux Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-builds
+        path: |
+          TerraNova-Client-${{ inputs.version }}-linux-x64.zip
+          TerraNova-Server-${{ inputs.version }}-linux-x64.zip
+
+  create-release:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Download Windows Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: windows-builds
+
+    - name: Download Linux Artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: linux-builds
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ inputs.version }}
+        name: Release ${{ inputs.version }}
+        draft: false
+        prerelease: false
+        files: |
+          TerraNova-Client-${{ inputs.version }}-win-x64.zip
+          TerraNova-Server-${{ inputs.version }}-win-x64.zip
+          TerraNova-Client-${{ inputs.version }}-linux-x64.zip
+          TerraNova-Server-${{ inputs.version }}-linux-x64.zip
+        body: |
+          ## Terra Nova ${{ inputs.version }}
+
+          ### Downloads
+
+          #### Windows (x64)
+          - **TerraNova-Client-${{ inputs.version }}-win-x64.zip** - Client application (single executable)
+          - **TerraNova-Server-${{ inputs.version }}-win-x64.zip** - Server application (single executable)
+
+          #### Linux (x64)
+          - **TerraNova-Client-${{ inputs.version }}-linux-x64.zip** - Client application (single executable)
+          - **TerraNova-Server-${{ inputs.version }}-linux-x64.zip** - Server application (single executable)
+
+          ### Running the Server
+          **Windows:**
+          1. Extract the server zip
+          2. Run `TerraNova.Server.exe`
+
+          **Linux:**
+          1. Extract the server zip
+          2. Make executable: `chmod +x TerraNova.Server`
+          3. Run: `./TerraNova.Server`
+
+          ### Running the Client
+          **Windows:**
+          1. Extract the client zip
+          2. Run `TerraNova.Client.exe`
+          3. Connect to the server (default: localhost:5000)
+
+          **Linux:**
+          1. Extract the client zip
+          2. Make executable: `chmod +x TerraNova.Client`
+          3. Run: `./TerraNova.Client`
+          4. Connect to the server (default: localhost:5000)
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
