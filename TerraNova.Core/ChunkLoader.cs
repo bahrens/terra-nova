@@ -1,6 +1,6 @@
 using TerraNova.Shared;
 
-namespace TerraNova.GameLogic;
+namespace TerraNova.Core;
 
 /// <summary>
 /// Manages chunk loading and unloading based on player position.

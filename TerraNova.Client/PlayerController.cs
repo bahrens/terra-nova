@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 using OpenTK.Windowing.GraphicsLibraryFramework;
-using TerraNova.GameLogic;
+using TerraNova.Core;
 using TerraNova.Shared;
 
 namespace TerraNova;

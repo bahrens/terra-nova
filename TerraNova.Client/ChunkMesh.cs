@@ -1,5 +1,5 @@
 using OpenTK.Graphics.OpenGL4;
-using TerraNova.GameLogic;
+using TerraNova.Core;
 
 namespace TerraNova;
 

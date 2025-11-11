@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 using TerraNova.Configuration;
-using TerraNova.GameLogic;
+using TerraNova.Core;
 using TerraNova.Shared;
 
 namespace TerraNova;

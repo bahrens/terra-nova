@@ -1,6 +1,6 @@
 using TerraNova.Shared;
 
-namespace TerraNova.GameLogic;
+namespace TerraNova.Core;
 
 /// <summary>
 /// Information about a raycast hit

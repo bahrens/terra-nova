@@ -1,6 +1,6 @@
 using TerraNova.Shared;
 
-namespace TerraNova.GameLogic;
+namespace TerraNova.Core;
 
 /// <summary>
 /// Platform-agnostic interface for rendering the voxel world.

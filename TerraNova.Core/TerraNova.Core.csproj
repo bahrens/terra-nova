@@ -12,6 +12,8 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <RootNamespace>TerraNova.Core</RootNamespace>
+    <AssemblyName>TerraNova.Core</AssemblyName>
   </PropertyGroup>
 
 </Project>

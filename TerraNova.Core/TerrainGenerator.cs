@@ -1,6 +1,6 @@
 using TerraNova.Shared;
 
-namespace TerraNova.GameLogic;
+namespace TerraNova.Core;
 
 /// <summary>
 /// Handles procedural terrain generation with multi-octave noise, caves, and ores

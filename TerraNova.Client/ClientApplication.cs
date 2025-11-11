@@ -3,7 +3,7 @@ using Microsoft.Extensions.Options;
 using OpenTK.Mathematics;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using TerraNova.Configuration;
-using TerraNova.GameLogic;
+using TerraNova.Core;
 using TerraNova.Shared;
 using Vector3 = OpenTK.Mathematics.Vector3;
 using Vector3i = TerraNova.Shared.Vector3i;

@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
-using TerraNova.GameLogic;
+using TerraNova.Core;
 using TerraNova.Shared;
 using OpenTKVector3 = OpenTK.Mathematics.Vector3;
 using SharedVector3 = TerraNova.Shared.Vector3;

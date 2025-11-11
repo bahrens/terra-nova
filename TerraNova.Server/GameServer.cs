@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TerraNova.Server.Configuration;
 using TerraNova.Shared;
-using TerraNova.GameLogic;
+using TerraNova.Core;
 
 namespace TerraNova.Server;
 

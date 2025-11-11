@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using TerraNova.Shared;
 
-namespace TerraNova.GameLogic;
+namespace TerraNova.Core;
 
 /// <summary>
 /// Manages chunk mesh generation with async processing using background worker threads.

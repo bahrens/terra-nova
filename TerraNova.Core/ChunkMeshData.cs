@@ -1,4 +1,4 @@
-namespace TerraNova.GameLogic;
+namespace TerraNova.Core;
 
 /// <summary>
 /// Data transfer object containing mesh data for a chunk.

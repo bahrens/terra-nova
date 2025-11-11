@@ -1,6 +1,6 @@
 using TerraNova.Shared;
 
-namespace TerraNova.GameLogic;
+namespace TerraNova.Core;
 
 /// <summary>
 /// Platform-agnostic game engine that manages the game loop, world state, and rendering.

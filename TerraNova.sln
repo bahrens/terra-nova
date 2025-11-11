@@ -9,7 +9,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TerraNova.Server", "TerraNo
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TerraNova.Client", "TerraNova.Client\TerraNova.Client.csproj", "{0FAD6313-5597-41AA-B3E1-DCEF2707992F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TerraNova.GameLogic", "TerraNova.GameLogic\TerraNova.GameLogic.csproj", "{220BB25F-24BF-45F9-AC8F-209ACA30A22B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TerraNova.Core", "TerraNova.Core\TerraNova.Core.csproj", "{220BB25F-24BF-45F9-AC8F-209ACA30A22B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
