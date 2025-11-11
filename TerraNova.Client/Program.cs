@@ -19,6 +19,7 @@ var host = Host.CreateDefaultBuilder(args)
 
         // Register services
         services.AddSingleton<INetworkClient, NetworkClient>();
+        services.AddSingleton<ClientApplication>();
         services.AddSingleton<Game>();
     })
     .Build();

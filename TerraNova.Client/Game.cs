@@ -6,109 +6,57 @@ using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using TerraNova.Configuration;
-using TerraNova.GameLogic;
-using TerraNova.Shared;
-using OpenTKVector3 = OpenTK.Mathematics.Vector3;
 
 namespace TerraNova;
 
 /// <summary>
-/// Main game class that manages the window and game loop
+/// Thin OpenTK adapter layer that bridges OpenTK events to ClientApplication.
+/// This class handles only OpenTK-specific concerns (window lifecycle, input events).
+/// All game logic is delegated to ClientApplication.
 /// </summary>
 public class Game : GameWindow
 {
-    private Camera _camera = null!;
+    private readonly ClientApplication _application;
+    private readonly ILogger<Game> _logger;
+
+    // Mouse tracking state
     private bool _firstMove = true;
     private Vector2 _lastMousePos;
 
-    private readonly INetworkClient _networkClient;
-    private readonly NetworkSettings _networkSettings;
-    private readonly CameraSettings _cameraSettings;
-    private readonly ILogger<Game> _logger;
-    private readonly ILoggerFactory _loggerFactory;
-    private Crosshair _crosshair = null!;
-    private Hotbar _hotbar = null!;
-
-    // New architecture: GameEngine + OpenTKRenderer
-    private World _world = null!;
-    private OpenTKRenderer _renderer = null!;
-    private GameEngine _gameEngine = null!;
-
-    // Player controller for input handling and interaction
-    private PlayerController? _playerController = null;
-
-    // FPS tracking
-    private double _fpsUpdateTimer = 0.0;
-    private int _frameCount = 0;
-    private double _fps = 0.0;
-
     public Game(
         IOptions<GameSettings> gameSettings,
-        IOptions<NetworkSettings> networkSettings,
-        IOptions<CameraSettings> cameraSettings,
-        INetworkClient networkClient,
-        ILogger<Game> logger,
-        ILoggerFactory loggerFactory)
+        ClientApplication application,
+        ILogger<Game> logger)
         : base(GameWindowSettings.Default,
                new NativeWindowSettings()
                {
                    ClientSize = (gameSettings.Value.WindowWidth, gameSettings.Value.WindowHeight),
                    Title = gameSettings.Value.WindowTitle,
-                   Flags = ContextFlags.ForwardCompatible // Use modern OpenGL
+                   Flags = ContextFlags.ForwardCompatible
                })
     {
-        _networkClient = networkClient;
-        _networkSettings = networkSettings.Value;
-        _cameraSettings = cameraSettings.Value;
+        _application = application;
         _logger = logger;
-        _loggerFactory = loggerFactory;
     }
 
     /// <summary>
-    /// Called once when the window is created. Use this for initialization.
+    /// Called once when the window is created. Initializes OpenGL and delegates to ClientApplication.
     /// </summary>
     protected override void OnLoad()
     {
         base.OnLoad();
 
-        // Set the clear color (background color) to sky blue
+        // OpenGL setup
         GL.ClearColor(0.53f, 0.81f, 0.92f, 1.0f);
-
-        // Enable depth testing so closer objects appear in front of farther ones
         GL.Enable(EnableCap.DepthTest);
-
-        // Enable backface culling to improve performance
-        // (don't render faces that are facing away from the camera)
         GL.Enable(EnableCap.CullFace);
         GL.CullFace(TriangleFace.Back);
-
-        // Initialize camera with configured settings (spawn position from config)
-        _camera = new Camera(new OpenTKVector3(_cameraSettings.SpawnX, _cameraSettings.SpawnY, _cameraSettings.SpawnZ))
-        {
-            Speed = _cameraSettings.MovementSpeed,
-            Sensitivity = _cameraSettings.MouseSensitivity,
-            Fov = MathHelper.DegreesToRadians(_cameraSettings.FieldOfView)
-        };
 
         // Capture and hide the mouse cursor for FPS controls
         CursorState = CursorState.Grabbed;
 
-        // Note: GameEngine and Renderer will be created in OnUpdateFrame
-        // after receiving world data from the network client
-
-        // Initialize PlayerController early (before UI) so we can access hotbar blocks
-        _playerController = new PlayerController(_camera, _networkClient, _loggerFactory.CreateLogger<PlayerController>());
-
-        // Initialize UI overlays
-        _crosshair = new Crosshair();
-        _crosshair.Initialize(ClientSize.X, ClientSize.Y);
-
-        _hotbar = new Hotbar(_playerController.HotbarBlocks);
-        _hotbar.Initialize(ClientSize.X, ClientSize.Y, _playerController.SelectedHotbarSlot);
-
-        // Connect to server using configured settings
-        _networkClient.Connect(_networkSettings.ServerHost, _networkSettings.ServerPort, _networkSettings.PlayerName);
-        _logger.LogInformation("Connecting to {Host}:{Port}...", _networkSettings.ServerHost, _networkSettings.ServerPort);
+        // Initialize application
+        _application.Initialize(ClientSize.X, ClientSize.Y);
 
         _logger.LogInformation("OpenGL Version: {Version}", GL.GetString(StringName.Version));
 
@@ -122,25 +70,17 @@ public class Game : GameWindow
     }
 
     /// <summary>
-    /// Called every frame to update game logic (physics, input, etc.)
+    /// Called every frame to update game logic. Delegates to ClientApplication.
     /// </summary>
     /// <param name="args">Contains delta time (time since last frame)</param>
     protected override void OnUpdateFrame(FrameEventArgs args)
     {
         base.OnUpdateFrame(args);
 
-        // Update FPS counter
-        _frameCount++;
-        _fpsUpdateTimer += args.Time;
-        if (_fpsUpdateTimer >= 0.5) // Update every 0.5 seconds
-        {
-            _fps = _frameCount / _fpsUpdateTimer;
-            Title = $"Terra Nova - FPS: {_fps:F0}";
-            _frameCount = 0;
-            _fpsUpdateTimer = 0.0;
-        }
+        // Update window title with FPS
+        Title = $"Terra Nova - FPS: {_application.CurrentFPS:F0}";
 
-        // Close window when Escape is pressed
+        // Handle ESC to close
         if (KeyboardState.IsKeyDown(Keys.Escape))
         {
             Close();
@@ -161,100 +101,12 @@ public class Game : GameWindow
             }
         }
 
-        // Hotbar selection (keys 1-9) - delegated to PlayerController
-        if (_playerController?.HandleHotbarSelection(KeyboardState) == true)
-        {
-            _hotbar.UpdateSelectedSlot(_playerController.SelectedHotbarSlot);
-        }
-
-        // Camera keyboard controls
-        float deltaTime = (float)args.Time;
-
-        if (KeyboardState.IsKeyDown(Keys.W))
-            _camera.ProcessKeyboard(CameraMovement.Forward, deltaTime);
-        if (KeyboardState.IsKeyDown(Keys.S))
-            _camera.ProcessKeyboard(CameraMovement.Backward, deltaTime);
-        if (KeyboardState.IsKeyDown(Keys.A))
-            _camera.ProcessKeyboard(CameraMovement.Left, deltaTime);
-        if (KeyboardState.IsKeyDown(Keys.D))
-            _camera.ProcessKeyboard(CameraMovement.Right, deltaTime);
-        if (KeyboardState.IsKeyDown(Keys.Space))
-            _camera.ProcessKeyboard(CameraMovement.Up, deltaTime);
-        if (KeyboardState.IsKeyDown(Keys.LeftShift))
-            _camera.ProcessKeyboard(CameraMovement.Down, deltaTime);
-
-        // Poll network events
-        _networkClient.Update();
-
-        // Initialize GameEngine and Renderer once world data is received
-        if (_networkClient.WorldReceived && _gameEngine == null && _networkClient.World != null)
-        {
-            _logger.LogInformation("World received! Initializing GameEngine and Renderer...");
-            _world = _networkClient.World;
-            _renderer = new OpenTKRenderer(_world, _loggerFactory.CreateLogger<OpenTKRenderer>());
-            _renderer.Initialize();
-            _renderer.SetCameraReference(_camera);
-            _gameEngine = new GameEngine(_renderer);
-
-            // Hook up chunk loading system BEFORE calling SetWorld
-            _gameEngine.OnChunkRequestNeeded = (chunks) =>
-            {
-                _logger.LogInformation("Requesting {Count} chunks from server", chunks.Length);
-                _networkClient.RequestChunks(chunks);
-            };
-
-            _networkClient.OnChunkReceived += (chunkPos, blocks) =>
-            {
-                _logger.LogInformation("Chunk ({X},{Z}) received with {Count} blocks", chunkPos.X, chunkPos.Z, blocks.Length);
-                _gameEngine.NotifyChunkReceived(chunkPos);
-            };
-
-            _networkClient.OnBlockUpdate += (x, y, z, blockType) =>
-            {
-                _logger.LogInformation("Block update received at ({X},{Y},{Z}) -> {Type}", x, y, z, blockType);
-                _gameEngine.NotifyBlockUpdate(x, y, z, blockType);
-            };
-
-            // Now set the world (this creates ChunkLoader with the callback)
-            _gameEngine.SetWorld(_world);
-
-            _logger.LogInformation("Chunk streaming enabled!");
-        }
-
-        // Update player position for chunk loading
-        if (_gameEngine != null)
-        {
-            var cameraPos = _camera.Position.ToShared();
-            _gameEngine.UpdatePlayerPosition(cameraPos);
-        }
-
-        // Perform raycast and handle block interaction (delegated to PlayerController)
-        if (_networkClient.WorldReceived && _networkClient.World != null && _gameEngine != null)
-        {
-            _playerController?.UpdateRaycast(_networkClient.World);
-            _playerController?.HandleBlockInteraction(MouseState, _networkClient.World);
-        }
-        else
-        {
-            _playerController?.UpdateRaycast(null);
-        }
-
-        // Update GameEngine (regenerates meshes if needed)
-        if (_gameEngine != null)
-        {
-            _gameEngine.Update(deltaTime);
-        }
-
-        // Update renderer (for periodic chunk cleanup)
-        if (_renderer != null)
-        {
-            _renderer.Update(args.Time);
-        }
+        // Delegate all game logic to application
+        _application.Update(KeyboardState, MouseState, args.Time);
     }
 
-
     /// <summary>
-    /// Called every frame to render graphics
+    /// Called every frame to render graphics. Delegates to ClientApplication.
     /// </summary>
     /// <param name="args">Contains delta time (time since last frame)</param>
     protected override void OnRenderFrame(FrameEventArgs args)
@@ -264,57 +116,31 @@ public class Game : GameWindow
         // Clear the screen and depth buffer
         GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
-        // Use cached raycast result from PlayerController for block highlighting
-        TerraNova.Shared.Vector3i? selectedBlockPos = null;
-        if (_playerController?.CachedRaycastHit != null)
-        {
-            selectedBlockPos = _playerController.CachedRaycastHit.BlockPosition;
-        }
-
-        // Tell renderer which block to highlight
-        if (_renderer != null)
-        {
-            if (selectedBlockPos.HasValue)
-            {
-                _renderer.HighlightBlock(selectedBlockPos.Value, true);
-            }
-            else
-            {
-                // Clear highlight if no block selected
-                _renderer.HighlightBlock(new TerraNova.Shared.Vector3i(0, 0, 0), false);
-            }
-
-            // Render the world (chunks + highlighted block)
-            _renderer.Render(ClientSize.X, ClientSize.Y);
-        }
-
-        // Draw UI overlays on top of everything
+        // Delegate rendering to application
         float aspectRatio = (float)ClientSize.X / ClientSize.Y;
-        _crosshair.Draw(aspectRatio);
-        _hotbar.Draw();
+        _application.Render(ClientSize.X, ClientSize.Y, aspectRatio);
 
-        // Swap the front and back buffers (double buffering)
+        // Swap buffers
         SwapBuffers();
     }
 
     /// <summary>
-    /// Called when the window is resized
+    /// Called when the window is resized. Delegates to ClientApplication.
     /// </summary>
     /// <param name="args">Contains new window size</param>
     protected override void OnResize(ResizeEventArgs args)
     {
         base.OnResize(args);
 
-        // Update the OpenGL viewport to match the new window size
+        // Update OpenGL viewport
         GL.Viewport(0, 0, args.Width, args.Height);
 
-        // Update UI overlays for new window dimensions
-        _crosshair?.OnResize(args.Width, args.Height);
-        _hotbar?.OnResize(args.Width, args.Height);
+        // Delegate to application
+        _application.OnResize(args.Width, args.Height);
     }
 
     /// <summary>
-    /// Called when the mouse moves
+    /// Called when the mouse moves. Delegates to ClientApplication.
     /// </summary>
     protected override void OnMouseMove(MouseMoveEventArgs e)
     {
@@ -332,23 +158,18 @@ public class Game : GameWindow
 
         _lastMousePos = new Vector2(e.X, e.Y);
 
-        // Update camera rotation
-        _camera.ProcessMouseMovement(deltaX, deltaY);
+        // Delegate to application
+        _application.OnMouseMove(deltaX, deltaY);
     }
 
     /// <summary>
-    /// Called when the window is about to close
+    /// Called when the window is about to close. Cleans up resources.
     /// </summary>
     protected override void OnUnload()
     {
         base.OnUnload();
 
-        // Clean up resources
-        _networkClient?.Disconnect();
-        _renderer?.Dispose();
-        _crosshair?.Dispose();
-        _hotbar?.Dispose();
-
+        _application?.Dispose();
         _logger.LogInformation("Terra Nova shutting down...");
     }
 }

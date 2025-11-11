@@ -69,15 +69,64 @@ public class PlayerController
     /// <summary>
     /// Updates player state based on input and world state.
     /// Should be called once per frame during the game update loop.
+    /// Orchestrates all player subsystems in the correct order.
     /// </summary>
     /// <param name="keyboardState">Current keyboard state</param>
     /// <param name="mouseState">Current mouse state</param>
-    /// <param name="world">The game world for raycasting and block interaction</param>
+    /// <param name="world">The game world for raycasting and block interaction (null if not received yet)</param>
     /// <param name="deltaTime">Time elapsed since last frame in seconds</param>
-    public void Update(KeyboardState keyboardState, MouseState mouseState, World world, double deltaTime)
+    public void Update(KeyboardState keyboardState, MouseState mouseState, World? world, double deltaTime)
     {
-        // TODO: Implement in Task 2.2 - Move camera input handling here
-        // TODO: Implement in Task 2.3 - Call UpdateRaycast, HandleHotbarSelection, HandleBlockInteraction
+        // Phase 1: Handle all input
+        HandleMovementInput(keyboardState, (float)deltaTime);
+        HandleHotbarSelection(keyboardState);
+
+        // Phase 2: Update world interaction (raycast and block interaction)
+        UpdateRaycast(world);
+        if (world != null)
+        {
+            HandleBlockInteraction(mouseState, world);
+        }
+
+        // In Stage 2B, additional phases will be added here:
+        // Phase 3: Step physics world
+        // Phase 4: Sync camera position to physics body
+    }
+
+    /// <summary>
+    /// Handles player movement input from keyboard.
+    /// Currently uses direct camera manipulation; will be replaced with physics forces in Stage 2B.2.
+    /// </summary>
+    /// <param name="keyboardState">Current keyboard state</param>
+    /// <param name="deltaTime">Time since last frame in seconds</param>
+    public void HandleMovementInput(KeyboardState keyboardState, float deltaTime)
+    {
+        // WASD movement
+        if (keyboardState.IsKeyDown(Keys.W))
+            _camera.ProcessKeyboard(CameraMovement.Forward, deltaTime);
+        if (keyboardState.IsKeyDown(Keys.S))
+            _camera.ProcessKeyboard(CameraMovement.Backward, deltaTime);
+        if (keyboardState.IsKeyDown(Keys.A))
+            _camera.ProcessKeyboard(CameraMovement.Left, deltaTime);
+        if (keyboardState.IsKeyDown(Keys.D))
+            _camera.ProcessKeyboard(CameraMovement.Right, deltaTime);
+
+        // Vertical movement (up/down)
+        if (keyboardState.IsKeyDown(Keys.Space))
+            _camera.ProcessKeyboard(CameraMovement.Up, deltaTime);
+        if (keyboardState.IsKeyDown(Keys.LeftShift))
+            _camera.ProcessKeyboard(CameraMovement.Down, deltaTime);
+    }
+
+    /// <summary>
+    /// Handles mouse look input for camera rotation.
+    /// Processes mouse movement delta to rotate the camera view.
+    /// </summary>
+    /// <param name="deltaX">Horizontal mouse movement in pixels</param>
+    /// <param name="deltaY">Vertical mouse movement in pixels</param>
+    public void HandleMouseLook(float deltaX, float deltaY)
+    {
+        _camera.ProcessMouseMovement(deltaX, deltaY);
     }
 
     /// <summary>

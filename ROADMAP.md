@@ -79,14 +79,14 @@
 
 **Prerequisites:** ✅ Phase 1 complete - stable foundation established
 
-**Estimated Duration:** 4-6 hours total (1-2 hours Stage 2A + 3-4 hours Stage 2B)
+**Estimated Duration:** 8.5-10.5 hours total (1-2 hours Stage 2A + 25-30 min Stage 2B.0 + 4-4.5 hours Stage 2B.0 Extended + 3-4 hours Stage 2B)
 **Priority:** HIGH - Core gameplay feature
-**Architecture Decision:** Hybrid Sequential Approach (Plan C) - recommended by game-architecture-optimizer
+**Architecture Decision:** Application Coordinator Pattern - recommended by game-architecture-optimizer
 
 ### Architectural Rationale
 
-**Why Two Stages?**
-Phase 2 is split into two sequential stages to maintain clean architecture throughout:
+**Why Four Stages?**
+Phase 2 is split into four sequential stages to maintain clean architecture throughout:
 
 1. **Stage 2A: PlayerController Extraction** (1-2 hours)
    - Moves existing player logic from Game.cs into proper PlayerController class
@@ -94,16 +94,35 @@ Phase 2 is split into two sequential stages to maintain clean architecture throu
    - Establishes separation of concerns BEFORE adding complexity
    - Sets foundation for physics to be added in architecturally correct location
 
-2. **Stage 2B: Physics Implementation** (3-4 hours)
-   - Adds Jitter Physics 2 to the properly structured PlayerController
-   - Physics code goes in correct architectural location from day 1
+2. **Stage 2B.0: Pre-Physics Refactoring** (25-30 minutes) - Input Routing
+   - Fixes architectural gaps discovered by game-architecture-optimizer
+   - Moves camera movement input from Game.cs to PlayerController
+   - Implements proper Update() orchestration method
+   - Prevents cross-component coupling and incorrect update order
+   - Makes physics integration straightforward
+
+3. **Stage 2B.0 Extended: Application Coordinator Pattern** (4-4.5 hours) - CRITICAL REFACTORING
+   - Eliminates "God Object" anti-pattern in Game.cs (335 lines doing 6 jobs)
+   - Extracts business logic into 4 specialized coordinator classes
+   - Reduces Game.cs to thin OpenTK adapter (~110 lines)
+   - Fixes network event registration architectural flaw
+   - **MUST HAPPEN BEFORE STAGE 2B** - prevents Game.cs ballooning to 500+ lines with physics
+   - Saves 4+ hours of rework vs. adding physics first
+
+4. **Stage 2B: Physics Implementation** (3-4 hours)
+   - Adds Jitter Physics 2 to the properly structured architecture
+   - Physics integrates cleanly with ClientApplication coordinator
+   - Clean separation between OpenTK lifecycle (Game.cs) and game logic (ClientApplication)
    - No rework or refactoring required after physics is added
 
-**Why Not Physics First?**
-- Adding physics directly to Game.cs would create a "god object" (600+ lines)
-- Physics belongs in PlayerController, not in window lifecycle management class
-- Would require costly refactoring later (violates Phase 1 principles)
-- Plan C saves development time and maintains clean architecture throughout
+**Why Refactor Game.cs Before Physics?**
+- Game.cs is already a "God Object" anti-pattern (335 lines, 6 responsibilities)
+- Adding physics directly would balloon Game.cs to 500+ lines
+- Physics belongs in application layer, not OpenTK lifecycle management class
+- Refactoring now: 4 hours. Refactoring after physics: 8+ hours of painful rework
+- Testing is easier without physics complexity
+- Creates professional game architecture that scales to future features
+- Application Coordinator Pattern is industry standard for game engines
 
 **Current State:**
 - Player logic scattered in Game.cs (hotbar, block interaction, raycasting)
@@ -114,8 +133,23 @@ Phase 2 is split into two sequential stages to maintain clean architecture throu
 **Target State After Stage 2A:**
 - PlayerController owns all player-related logic and state
 - Game.cs focused on window lifecycle, initialization, and delegation
-- Clean separation of concerns ready for physics integration
+- Clean separation of concerns ready for input refactoring
 - All existing functionality preserved (hotbar, block breaking/placing)
+
+**Target State After Stage 2B.0:**
+- All player input (keyboard and mouse) routed through PlayerController
+- PlayerController.Update() properly orchestrates all subsystems
+- Game.cs simplified to single Update() delegation
+- Clean foundation ready for Game.cs refactoring
+
+**Target State After Stage 2B.0 Extended:**
+- Game.cs is thin OpenTK adapter (~110 lines, single responsibility)
+- ClientApplication orchestrates all game systems (Camera, PlayerController, Renderer, GameEngine)
+- NetworkCoordinator manages connection lifecycle and world events (fixes architectural flaw)
+- UIManager centralizes UI overlay management (Crosshair, Hotbar)
+- WindowStateManager handles FPS tracking and window state
+- Professional game architecture following Application Coordinator Pattern
+- Clean foundation ready for physics integration
 
 **Target State After Stage 2B:**
 - Physics-based player controller with collision detection
@@ -297,7 +331,7 @@ Phase 2 is split into two sequential stages to maintain clean architecture throu
 
 ### Stage 2A Success Criteria
 
-Before proceeding to Stage 2B, verify:
+Before proceeding to Stage 2B.0, verify:
 - Build: 0 warnings, 0 errors
 - Hotbar selection works (keys 1-9 change selected slot)
 - Block breaking works (left click removes blocks)
@@ -309,7 +343,504 @@ Before proceeding to Stage 2B, verify:
 
 ---
 
-## Stage 2B: Physics Implementation (BLOCKED - Requires Stage 2A Complete)
+## Stage 2B.0: Pre-Physics Refactoring (BLOCKED - Requires Stage 2A Complete)
+
+**Goal:** Refactor input handling architecture to prepare for physics integration.
+
+**Estimated Duration:** 25-30 minutes
+**Complexity:** Simple
+**Why Critical:** Prevents cross-component coupling and incorrect update order when physics is added
+
+**Architectural Rationale:**
+
+Stage 2A successfully extracted player logic into PlayerController, but two architectural gaps remain:
+
+1. **Input Location Mismatch:** Camera movement (WASD keys) is still in Game.cs, but physics body will live in PlayerController. This creates coupling risk when physics is added.
+
+2. **Update Orchestration Missing:** PlayerController.Update() is a stub. Game.cs still orchestrates PlayerController internals, risking incorrect update order (common source of physics bugs).
+
+**Without Stage 2B.0:** Stage 2B will be messier, require more rework, and create technical debt.
+
+**With Stage 2B.0:** Physics integration becomes straightforward internal changes to PlayerController.
+
+### Task 2B.0.1: Move Camera Movement Input to PlayerController
+**Status:** Ready
+**Priority:** CRITICAL
+**Estimated Time:** 15 minutes
+**Complexity:** SIMPLE
+
+**Description:** Move WASD/Space/Shift camera movement input from Game.cs to PlayerController for proper encapsulation.
+
+**Implementation Steps:**
+1. Create `PlayerController.HandleMovementInput(KeyboardState, float deltaTime)` method
+2. Move WASD/Space/Shift logic from Game.cs OnUpdateFrame (lines 173-184)
+3. Update Game.cs to call `_playerController.HandleMovementInput(keyboardState, deltaTime)`
+4. Preserve current behavior (direct camera.ProcessKeyboard calls)
+5. Build and verify functionality unchanged
+
+**Completion Criteria:**
+- HandleMovementInput() method exists in PlayerController
+- Handles W/A/S/D keys for movement, Space for up, LeftShift for down
+- Uses deltaTime for frame-independent movement
+- Game.cs lines 173-184 replaced with single HandleMovementInput() call
+- All movement works identically to before refactoring
+- Build: 0 warnings, 0 errors
+
+**Files to Modify:**
+- `TerraNova.Client/PlayerController.cs` (add HandleMovementInput method)
+- `TerraNova.Client/Game.cs` (replace WASD logic with method call)
+
+**Notes:**
+- Currently calls camera.ProcessKeyboard() directly - this is correct for now
+- When physics is added in Stage 2B, these will become force applications on physics body
+- This refactoring isolates movement input in the correct architectural location
+
+### Task 2B.0.2: Implement PlayerController.Update() Orchestration
+**Status:** Blocked (requires Task 2B.0.1)
+**Priority:** CRITICAL
+**Estimated Time:** 10 minutes
+**Complexity:** SIMPLE
+
+**Description:** Implement PlayerController.Update() method body to orchestrate all player subsystems in correct order.
+
+**Implementation Steps:**
+1. Implement Update() method body (currently stub at lines 77-81 in PlayerController.cs)
+2. Orchestrate method calls in correct order:
+   - HandleMovementInput(keyboardState, deltaTime)
+   - HandleHotbarSelection(keyboardState)
+   - UpdateRaycast()
+   - HandleBlockInteraction(mouseState)
+3. Update Game.cs OnUpdateFrame to single `_playerController.Update(keyboardState, mouseState, deltaTime)` call
+4. Remove scattered method calls from Game.cs
+5. Build and verify functionality unchanged
+
+**Completion Criteria:**
+- PlayerController.Update() fully implemented (no longer stub)
+- Calls subsystem methods in correct order
+- Game.cs OnUpdateFrame simplified to single _playerController.Update() call
+- All scattered PlayerController method calls removed from Game.cs
+- All functionality works identically to before refactoring
+- Build: 0 warnings, 0 errors
+
+**Files to Modify:**
+- `TerraNova.Client/PlayerController.cs` (implement Update() method body)
+- `TerraNova.Client/Game.cs` (simplify to single Update() delegation)
+
+**Notes:**
+- This establishes proper update order: input → selection → raycast → interaction
+- When physics is added, physics step will be inserted between input and interaction
+- Prevents common physics bugs caused by incorrect update ordering
+
+### Task 2B.0.3: Move Mouse Look to PlayerController (OPTIONAL)
+**Status:** Blocked (requires Task 2B.0.2)
+**Priority:** RECOMMENDED
+**Estimated Time:** 5 minutes
+**Complexity:** SIMPLE
+
+**Description:** Complete input abstraction by moving mouse look from Game.cs to PlayerController.
+
+**Implementation Steps:**
+1. Create `PlayerController.HandleMouseLook(float deltaX, float deltaY)` method
+2. Move mouse look logic from Game.cs OnMouseMove event handler
+3. Update Game.cs OnMouseMove to call `_playerController.HandleMouseLook(e.DeltaX, e.DeltaY)`
+4. Preserve current camera rotation behavior
+5. Build and verify functionality unchanged
+
+**Completion Criteria:**
+- HandleMouseLook() method exists in PlayerController
+- Takes deltaX and deltaY parameters
+- Updates camera rotation (preserves current behavior)
+- Game.cs OnMouseMove simplified to single HandleMouseLook() call
+- Mouse look works identically to before refactoring
+- Build: 0 warnings, 0 errors
+
+**Files to Modify:**
+- `TerraNova.Client/PlayerController.cs` (add HandleMouseLook method)
+- `TerraNova.Client/Game.cs` (simplify OnMouseMove event handler)
+
+**Notes:**
+- Optional but recommended for consistency
+- Completes input abstraction - all input routed through PlayerController
+- Makes future VR or gamepad support easier to add
+
+### Stage 2B.0 Success Criteria
+
+Before proceeding to Stage 2B.0 Extended, verify:
+- Build: 0 warnings, 0 errors
+- All player input (keyboard and mouse) routed through PlayerController
+- Game.cs OnUpdateFrame simplified to single _playerController.Update() call
+- All movement (WASD/Space/Shift) works identically to before
+- Mouse look works identically to before
+- Hotbar, block breaking/placing still work
+- PlayerController.Update() orchestrates all subsystems in correct order
+- Clean foundation established for Game.cs refactoring
+
+---
+
+## Stage 2B.0 Extended: Application Coordinator Pattern (BLOCKED - Requires Stage 2B.0 Complete)
+
+**Goal:** Refactor Game.cs from "God Object" anti-pattern to thin OpenTK adapter following Application Coordinator Pattern.
+
+**Estimated Duration:** 4-4.5 hours
+**Complexity:** Medium to High
+**Why Critical:** Prevents Game.cs from becoming 500+ lines when physics is added; establishes professional game architecture
+
+### Architectural Analysis: The "God Object" Problem
+
+**Current Game.cs Responsibilities (6 distinct jobs):**
+1. OpenTK lifecycle management (OnLoad, OnUpdateFrame, OnRenderFrame) - **BELONGS HERE**
+2. Application initialization orchestration (Camera, Renderer, GameEngine, etc.) - **EXTRACT**
+3. Network event coordination (WorldReceived event handler in update loop) - **EXTRACT - CRITICAL FLAW**
+4. UI management (Crosshair, Hotbar ownership and rendering) - **EXTRACT**
+5. Window state management (FPS tracking, window title updates) - **EXTRACT**
+6. System coordination (orchestrating Camera, PlayerController, Renderer updates) - **EXTRACT**
+
+**Architectural Flaw - Network Events in Update Loop:**
+Game.cs currently registers network event handlers inside `OnUpdateFrame` (lines 195-204), causing:
+- Event handlers registered thousands of times per second
+- Potential memory leaks from repeated event subscriptions
+- Incorrect lifecycle management of network state
+- Violation of event-driven architecture principles
+
+**Target Architecture - Application Coordinator Pattern:**
+
+Game.cs should be a **thin adapter** between OpenTK and game logic:
+- **ONLY** OpenGL setup and lifecycle callbacks
+- **DELEGATES** to ClientApplication for all game logic
+- Target: ~110 lines (down from 335 lines)
+
+Four new coordinator classes handle business logic:
+
+1. **ClientApplication** - Main orchestrator
+   - Owns Camera, PlayerController, Renderer, GameEngine
+   - Orchestrates all game systems
+   - Public API: Initialize(), Update(), Render(), OnResize(), OnMouseMove()
+
+2. **NetworkCoordinator** - Network management
+   - Manages connection lifecycle
+   - Handles WorldReceived events (FIXES architectural flaw)
+   - Attaches callbacks to GameEngine once, not every frame
+
+3. **UIManager** - UI overlay management
+   - Owns Crosshair and Hotbar
+   - Centralizes UI initialization, updates, rendering
+
+4. **WindowStateManager** - Window state
+   - FPS tracking and reporting
+   - Window title updates
+
+**Benefits:**
+- Single Responsibility Principle - each class has one job
+- Testability - coordinators can be unit tested independently
+- Maintainability - easy to find and modify specific functionality
+- Scalability - adding physics becomes simple coordinator integration
+- Professional architecture - industry standard game engine pattern
+
+**Code Size Impact:**
+- Game.cs: 335 lines → ~110 lines (67% reduction)
+- OnUpdateFrame: 130 lines → 14 lines (89% reduction)
+- OnRenderFrame: 36 lines → 9 lines (75% reduction)
+- New coordinator classes: ~460 lines (well-organized, single-purpose)
+
+### Task 2B.0.5: Extract WindowStateManager
+**Status:** Ready
+**Priority:** HIGH
+**Estimated Time:** 30 minutes
+**Complexity:** SIMPLE
+
+**Description:** Create WindowStateManager to handle FPS tracking and window state updates.
+
+**Implementation Steps:**
+1. Create `TerraNova.Client/WindowStateManager.cs`
+2. Move FPS tracking logic from Game.cs (lines 131-143)
+3. Add CurrentFPS property (public read-only)
+4. Add UpdateFPS(double deltaTime) method
+5. Add GetWindowTitle() method that returns formatted title
+6. Update Game.cs to instantiate WindowStateManager in OnLoad
+7. Update Game.cs to call windowStateManager.UpdateFPS(deltaTime)
+8. Update Game.cs to use windowStateManager.GetWindowTitle()
+
+**Completion Criteria:**
+- WindowStateManager.cs exists with FPS tracking logic
+- CurrentFPS property provides read-only access to FPS value
+- UpdateFPS() method handles FPS calculation
+- GetWindowTitle() returns "Terra Nova - FPS: XX.X"
+- Game.cs uses WindowStateManager instead of local FPS tracking
+- Window title updates correctly with FPS display
+- Build: 0 warnings, 0 errors
+
+**Files to Create:**
+- `TerraNova.Client/WindowStateManager.cs` (~60 lines)
+
+**Files to Modify:**
+- `TerraNova.Client/Game.cs` (remove FPS tracking, add WindowStateManager usage)
+
+**Notes:**
+- This is the simplest extraction task - good starting point
+- WindowStateManager is stateful (tracks FPS history)
+- Future enhancements: window size tracking, fullscreen state, etc.
+
+### Task 2B.0.6: Extract UIManager
+**Status:** Blocked (requires Task 2B.0.5)
+**Priority:** HIGH
+**Estimated Time:** 45 minutes
+**Complexity:** SIMPLE to MODERATE
+
+**Description:** Create UIManager to centralize UI overlay management (Crosshair, Hotbar).
+
+**Implementation Steps:**
+1. Create `TerraNova.Client/UIManager.cs`
+2. Add Crosshair and Hotbar fields (ownership transferred from Game.cs)
+3. Implement Initialize() method (creates crosshair and hotbar shaders/VAOs)
+4. Implement Update(int selectedHotbarSlot) method
+5. Implement Render(int width, int height, int selectedHotbarSlot, Inventory inventory) method
+6. Move crosshair rendering logic from Game.cs OnRenderFrame
+7. Move hotbar rendering logic from Game.cs OnRenderFrame
+8. Update Game.cs to instantiate UIManager in OnLoad
+9. Update Game.cs to call uiManager.Render() in OnRenderFrame
+10. Remove Crosshair and Hotbar fields from Game.cs
+
+**Completion Criteria:**
+- UIManager.cs exists with UI rendering logic
+- UIManager owns Crosshair and Hotbar instances
+- Initialize() method creates all UI resources
+- Render() method handles all UI overlay rendering
+- Game.cs no longer owns UI components
+- Crosshair displays correctly (centered reticle)
+- Hotbar displays correctly (9 slots, selection highlight)
+- Hotbar selection visual feedback works
+- Build: 0 warnings, 0 errors
+
+**Files to Create:**
+- `TerraNova.Client/UIManager.cs` (~80 lines)
+
+**Files to Modify:**
+- `TerraNova.Client/Game.cs` (remove UI fields, add UIManager usage)
+
+**Notes:**
+- UIManager depends on ILogger (add to constructor)
+- Future enhancements: health bar, inventory UI, debug overlay, etc.
+- Centralizing UI makes future UI features easier to add
+
+### Task 2B.0.7: Extract NetworkCoordinator (CRITICAL - Fixes Architectural Flaw)
+**Status:** Blocked (requires Task 2B.0.6)
+**Priority:** CRITICAL
+**Estimated Time:** 60 minutes
+**Complexity:** MODERATE to HIGH
+
+**Description:** Create NetworkCoordinator to manage network lifecycle and FIX event handler registration bug.
+
+**CRITICAL BUG TO FIX:**
+Game.cs currently registers WorldReceived event handlers **inside OnUpdateFrame** (lines 195-204), causing:
+- Event handlers subscribed 60+ times per second (thousands per session)
+- Potential memory leaks from duplicate subscriptions
+- Poor performance from redundant event handler chains
+- Incorrect network lifecycle management
+
+**Implementation Steps:**
+1. Create `TerraNova.Client/NetworkCoordinator.cs`
+2. Add GameEngine and Camera fields
+3. Add _worldInitialized flag to track initialization state
+4. Implement Initialize(GameEngine engine, Camera camera) method
+5. Move network event registration ONCE in Initialize() (NOT in update loop)
+6. Implement HandleWorldReceived() method (from Game.cs lines 197-202)
+7. Move world initialization logic from Game.cs OnUpdateFrame
+8. Update Game.cs to instantiate NetworkCoordinator in OnLoad
+9. Update Game.cs to call networkCoordinator.Initialize() ONCE after GameEngine connection
+10. Remove WorldReceived event registration from Game.cs OnUpdateFrame (lines 195-204)
+11. Remove _worldInitialized flag from Game.cs (now owned by NetworkCoordinator)
+
+**Completion Criteria:**
+- NetworkCoordinator.cs exists with network management logic
+- WorldReceived event handler registered ONCE (not in update loop)
+- HandleWorldReceived() called when world data received from server
+- World initialization (spawn position, camera position) happens once
+- _worldInitialized flag properly prevents duplicate initialization
+- Game.cs no longer has network event registration in OnUpdateFrame
+- World loading and chunk streaming work correctly
+- No duplicate event subscriptions (verify with logging)
+- Build: 0 warnings, 0 errors
+
+**Files to Create:**
+- `TerraNova.Client/NetworkCoordinator.cs` (~120 lines)
+
+**Files to Modify:**
+- `TerraNova.Client/Game.cs` (remove network event logic, add NetworkCoordinator usage)
+
+**Notes:**
+- This task fixes a CRITICAL architectural flaw discovered by architect
+- NetworkCoordinator depends on ILogger (add to constructor)
+- Event handlers should be registered in Initialize(), not Update()
+- This is the most important task in Stage 2B.0 Extended
+- Future enhancements: connection retry logic, disconnect handling, etc.
+
+### Task 2B.0.8: Create ClientApplication Orchestrator
+**Status:** Blocked (requires Task 2B.0.7)
+**Priority:** HIGH
+**Estimated Time:** 90 minutes
+**Complexity:** HIGH
+
+**Description:** Create ClientApplication as main orchestrator and refactor Game.cs to thin adapter.
+
+**Implementation Steps:**
+1. Create `TerraNova.Client/ClientApplication.cs`
+2. Add fields: Camera, PlayerController, Renderer, GameEngine, NetworkCoordinator, UIManager, WindowStateManager
+3. Implement Initialize() method:
+   - Create Camera
+   - Create Renderer (with ILogger)
+   - Create GameEngine and connect to server
+   - Create NetworkCoordinator and initialize
+   - Create PlayerController
+   - Create UIManager and initialize
+   - Create WindowStateManager
+4. Implement Update(KeyboardState keyboard, MouseState mouse, float deltaTime) method:
+   - Call windowStateManager.UpdateFPS(deltaTime)
+   - Call playerController.Update(keyboard, mouse, deltaTime)
+   - Call gameEngine.Update()
+5. Implement Render(int width, int height) method:
+   - Call renderer.Render(...)
+   - Call uiManager.Render(...)
+6. Implement OnResize(int width, int height) method:
+   - Update camera aspect ratio
+   - Update renderer viewport
+7. Implement OnMouseMove(float deltaX, float deltaY) method:
+   - Delegate to playerController.HandleMouseLook(deltaX, deltaY)
+8. Refactor Game.cs to use ClientApplication:
+   - Replace all game system fields with single _clientApplication field
+   - OnLoad: Create and initialize ClientApplication
+   - OnUpdateFrame: Call _clientApplication.Update() (14 lines down from 130)
+   - OnRenderFrame: Call _clientApplication.Render() (9 lines down from 36)
+   - OnResize: Call _clientApplication.OnResize()
+   - OnMouseMove: Call _clientApplication.OnMouseMove()
+9. Verify Game.cs is now ~110 lines (thin adapter)
+10. Test all functionality end-to-end
+
+**Completion Criteria:**
+- ClientApplication.cs exists as main orchestrator (~200 lines)
+- Game.cs reduced from 335 lines to approximately 110 lines
+- Game.cs OnUpdateFrame reduced from 130 lines to ~14 lines
+- Game.cs OnRenderFrame reduced from 36 lines to ~9 lines
+- Game.cs is now a thin OpenTK adapter (single responsibility)
+- All functionality works identically to before refactoring:
+  - Movement (WASD/Space/Shift)
+  - Mouse look
+  - Hotbar selection (keys 1-9)
+  - Block breaking (left click)
+  - Block placement (right click)
+  - Block highlighting (targeted block outline)
+  - FPS display in window title
+  - Chunk loading/streaming
+- Build: 0 warnings, 0 errors
+
+**Files to Create:**
+- `TerraNova.Client/ClientApplication.cs` (~200 lines)
+
+**Files to Modify:**
+- `TerraNova.Client/Game.cs` (major refactoring to thin adapter)
+
+**Notes:**
+- This is the largest and most complex task in Stage 2B.0 Extended
+- ClientApplication is the "heart" of the game - orchestrates everything
+- Game.cs becomes simple OpenTK window management
+- Take time to test thoroughly - this touches every system
+- Consider committing after this task (major architectural milestone)
+
+### Task 2B.0.9: Update Dependency Injection Container
+**Status:** Blocked (requires Task 2B.0.8)
+**Priority:** HIGH
+**Estimated Time:** 15 minutes
+**Complexity:** SIMPLE
+
+**Description:** Register new coordinator services in Program.cs DI container.
+
+**Implementation Steps:**
+1. Open `TerraNova.Client/Program.cs`
+2. Register ClientApplication as singleton (if using DI for Game.cs)
+3. Alternatively: Update Game.cs constructor to manually instantiate ClientApplication
+4. Verify application launches correctly
+5. Test all functionality end-to-end
+6. Commit changes with descriptive message
+
+**Completion Criteria:**
+- Program.cs updated with new service registrations (if using DI)
+- Game.cs constructor receives ClientApplication (or instantiates it)
+- Application launches without errors
+- All functionality verified working:
+  - Window opens and displays game world
+  - Movement, mouse look, hotbar, block interaction all work
+  - FPS display updates correctly
+  - Network connection and chunk streaming work
+  - No console errors or exceptions
+- Build: 0 warnings, 0 errors
+
+**Files to Modify:**
+- `TerraNova.Client/Program.cs` (potentially, depends on DI usage)
+- `TerraNova.Client/Game.cs` (constructor, if needed)
+
+**Notes:**
+- This is a small cleanup/integration task
+- Verifies the entire refactoring works end-to-end
+- Good opportunity for final testing before Stage 2B
+- Consider this a "phase transition" commit
+
+### Stage 2B.0 Extended Success Criteria
+
+Before proceeding to Stage 2B (Physics), verify:
+- Build: 0 warnings, 0 errors
+- **Code metrics:**
+  - Game.cs reduced from 335 lines to approximately 110 lines
+  - Game.cs OnUpdateFrame: 130 lines → ~14 lines
+  - Game.cs OnRenderFrame: 36 lines → ~9 lines
+  - 4 new coordinator classes created (~460 lines total, well-organized)
+- **Architecture:**
+  - Game.cs is thin OpenTK adapter (single responsibility)
+  - ClientApplication orchestrates all game systems
+  - NetworkCoordinator fixes event registration flaw (no longer in update loop)
+  - UIManager centralizes UI overlay management
+  - WindowStateManager handles FPS and window state
+- **Functionality (all working identically to before):**
+  - Movement (WASD/Space/Shift)
+  - Mouse look
+  - Hotbar selection (keys 1-9, visual feedback)
+  - Block breaking (left click)
+  - Block placement (right click)
+  - Block highlighting (targeted block outline)
+  - FPS display in window title
+  - Network connection and world loading
+  - Chunk loading/streaming
+- **Testing:**
+  - No console errors or exceptions
+  - No memory leaks from duplicate event subscriptions
+  - All existing functionality preserved
+  - Clean foundation ready for physics integration
+
+### Why Refactor Game.cs Now? (Decision Rationale)
+
+**Option 1: Refactor Before Physics** (CHOSEN)
+- Time investment: 4 hours now
+- Result: Clean architecture, physics integrates smoothly
+- Physics implementation: 3-4 hours (as estimated)
+- Total: 7-8 hours
+
+**Option 2: Physics First, Refactor Later**
+- Physics implementation: 3-4 hours (messy, bloats Game.cs to 500+ lines)
+- Result: Technical debt, "God Object" anti-pattern worsens
+- Refactoring: 6-8 hours (painful, risk breaking physics)
+- Total: 9-12 hours + high risk
+
+**Decision Factors:**
+1. **Time Savings:** Refactoring now saves 2-4 hours vs. refactoring later
+2. **Risk Reduction:** Testing without physics complexity is much easier
+3. **Clean Integration:** Physics becomes clean coordinator integration, not messy addition to god object
+4. **Professional Architecture:** Application Coordinator Pattern is industry standard
+5. **Future Features:** Every new feature benefits from clean architecture (saves time forever)
+6. **No Downside:** All functionality preserved, just better organized
+
+**Architect's Recommendation:** "This refactoring will save significant time and pain in Stage 2B and beyond. Do it now."
+
+---
+
+## Stage 2B: Physics Implementation (BLOCKED - Requires Stage 2B.0 Extended Complete)
 
 **Goal:** Implement Jitter Physics 2 in the properly structured PlayerController.
 
@@ -573,7 +1104,7 @@ Evaluate new issues discovered during implementation:
 
 ## Phase 2 Execution Recommendation
 
-**Architecture Decision:** Plan C (Hybrid Sequential Approach) - STRONGLY RECOMMENDED
+**Architecture Decision:** Application Coordinator Pattern - STRONGLY RECOMMENDED
 
 **Start with:** Stage 2A (PlayerController Extraction) - DO NOT skip to physics!
 
@@ -587,31 +1118,55 @@ Evaluate new issues discovered during implementation:
 5. Complete Task 2A.5 (Update Hotbar UI) - 10 min
 6. Verify Stage 2A Success Criteria before proceeding
 
-### Stage 2B (3-4 hours):
-7. Complete Task 2B.1 (Jitter Physics 2 Integration) - 30-45 min
-8. Complete Task 2B.2 (Implement Player Physics Body) - 45-60 min
-9. Complete Task 2B.3 (Add Terrain Collision) - 60-90 min (most complex)
-10. Complete Task 2B.4 (Implement Gravity and Jumping) - 30-45 min
-11. Verify Stage 2B Success Criteria
-12. (Optional) Fix distance metric mismatch if time permits
+### Stage 2B.0 (25-30 minutes): Input Routing - CRITICAL
+7. Complete Task 2B.0.1 (Move Camera Movement Input) - 15 min
+8. Complete Task 2B.0.2 (Implement Update() Orchestration) - 10 min
+9. Complete Task 2B.0.3 (Move Mouse Look) - 5 min (OPTIONAL)
+10. Verify Stage 2B.0 Success Criteria before proceeding
+
+### Stage 2B.0 Extended (4-4.5 hours): Application Coordinator Pattern - CRITICAL REFACTORING
+11. Complete Task 2B.0.5 (Extract WindowStateManager) - 30 min
+12. Complete Task 2B.0.6 (Extract UIManager) - 45 min
+13. Complete Task 2B.0.7 (Extract NetworkCoordinator) - 60 min (FIXES CRITICAL BUG)
+14. Complete Task 2B.0.8 (Create ClientApplication) - 90 min (MAJOR REFACTORING)
+15. Complete Task 2B.0.9 (Update DI Container) - 15 min
+16. Verify Stage 2B.0 Extended Success Criteria before proceeding
+
+### Stage 2B (3-4 hours): Physics Implementation
+17. Complete Task 2B.1 (Jitter Physics 2 Integration) - 30-45 min
+18. Complete Task 2B.2 (Implement Player Physics Body) - 45-60 min
+19. Complete Task 2B.3 (Add Terrain Collision) - 60-90 min (most complex)
+20. Complete Task 2B.4 (Implement Gravity and Jumping) - 30-45 min
+21. Verify Stage 2B Success Criteria
+22. (Optional) Fix distance metric mismatch if time permits
 
 **Why This Order Matters:**
-- Stage 2A establishes clean architecture BEFORE adding physics complexity
-- Physics code goes into PlayerController (correct location) from day 1
-- Skipping to physics creates 600+ line god object in Game.cs
-- Plan C saves 1+ hour compared to physics-first approach (no rework needed)
+- Stage 2A establishes clean architecture BEFORE adding complexity
+- Stage 2B.0 fixes input routing architectural gaps
+- **Stage 2B.0 Extended eliminates "God Object" anti-pattern BEFORE physics**
+- Game.cs refactoring prevents 500+ line monster class
+- NetworkCoordinator fixes CRITICAL event registration bug (handlers in update loop)
+- Testing is easier without physics complexity
+- Physics integrates cleanly into ClientApplication coordinator
+- Refactoring now: 4 hours. Refactoring after physics: 8+ hours + high risk
+- Application Coordinator Pattern is industry standard game architecture
 - Maintains Phase 1 principles throughout development
 
 **Expected Challenges:**
 - Task 2A.4 requires careful attention to ensure all logic is properly extracted
+- Task 2B.0.8 (ClientApplication) is the most complex refactoring - test thoroughly
 - Task 2B.3 (terrain collision) will likely need iteration to handle edge cases
 - Physics tuning (Task 2B.4) is subjective - user testing is essential
 - Jitter2 documentation may be limited - expect some trial and error
 
 **Success Metrics for Phase 2:**
 - Stage 2A: Game.cs reduced to ~300 lines, all player logic in PlayerController
+- Stage 2B.0: All input routed through PlayerController, proper Update() orchestration
+- **Stage 2B.0 Extended: Game.cs reduced to ~110 lines, 4 coordinator classes created**
+- **Stage 2B.0 Extended: Network event bug fixed (no more handlers in update loop)**
 - Stage 2B: Physics-based movement feels natural and responsive
 - No clipping through terrain or falling through floor
 - Jump height and gravity feel similar to Minecraft
 - Performance remains smooth (60 FPS) with physics enabled
 - Clean architecture maintained throughout (no god objects)
+- Professional game engine architecture following industry standards
