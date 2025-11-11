@@ -52,7 +52,7 @@ public class ChunkLoader
         );
 
         // Determine which chunks should be loaded
-        var chunksToLoad = new List<Vector2i>();
+        var chunksToLoad = new List<(Vector2i pos, float distance)>();
         for (int x = -LoadDistance; x <= LoadDistance; x++)
         {
             for (int z = -LoadDistance; z <= LoadDistance; z++)
@@ -66,17 +66,20 @@ public class ChunkLoader
                     // If chunk not already loaded, request it
                     if (!_loadedChunks.Contains(chunkPos) && _world.GetChunk(chunkPos) == null)
                     {
-                        chunksToLoad.Add(chunkPos);
+                        chunksToLoad.Add((chunkPos, distance));
                         _loadedChunks.Add(chunkPos);
                     }
                 }
             }
         }
 
+        // Sort chunks by distance from player (closest first) for more natural loading
+        chunksToLoad.Sort((a, b) => a.distance.CompareTo(b.distance));
+
         // Request new chunks from server if any
         if (chunksToLoad.Count > 0 && OnChunkRequestNeeded != null)
         {
-            OnChunkRequestNeeded(chunksToLoad.ToArray());
+            OnChunkRequestNeeded(chunksToLoad.Select(c => c.pos).ToArray());
         }
 
         // Unload distant chunks to save memory
