@@ -27,7 +27,7 @@ public class ClientApplication : IDisposable
     private readonly ILoggerFactory _loggerFactory;
 
     // Renderer and game engine (created after world received)
-    private OpenTKRenderer? _renderer;
+    private IRenderer? _renderer;
     private GameEngine? _gameEngine;
     private World? _world;
 
@@ -187,7 +187,7 @@ public class ClientApplication : IDisposable
         _world = _networkCoordinator.World;
         _renderer = new OpenTKRenderer(_world!, _loggerFactory.CreateLogger<OpenTKRenderer>());
         _renderer.Initialize();
-        _renderer.SetCameraReference(_camera);
+        _renderer.SetCamera(_camera);
 
         _gameEngine = new GameEngine(_renderer);
 

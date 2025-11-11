@@ -143,11 +143,15 @@ public class OpenTKRenderer : IRenderer, IDisposable
     }
 
     /// <summary>
-    /// Set the camera reference (called by Game.cs)
+    /// Set the camera reference for view matrix calculations
     /// </summary>
-    public void SetCameraReference(Camera camera)
+    /// <param name="cameraView">Camera view interface (must be Camera implementation for OpenTK)</param>
+    public void SetCamera(ICameraView cameraView)
     {
-        _camera = camera;
+        if (cameraView is not Camera cam)
+            throw new ArgumentException("Camera must be of type Camera for OpenTKRenderer", nameof(cameraView));
+
+        _camera = cam;
     }
 
     /// <summary>

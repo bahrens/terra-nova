@@ -79,14 +79,14 @@
 
 **Prerequisites:** ✅ Phase 1 complete - stable foundation established
 
-**Estimated Duration:** 8.5-10.5 hours total (1-2 hours Stage 2A + 25-30 min Stage 2B.0 + 4-4.5 hours Stage 2B.0 Extended + 3-4 hours Stage 2B)
+**Estimated Duration:** 10.5-13.5 hours total (1-2 hours Stage 2A + 25-30 min Stage 2B.0 + 2-3 hours OpenTK Abstraction + 4-4.5 hours Stage 2B.0 Extended + 3-4 hours Stage 2B)
 **Priority:** HIGH - Core gameplay feature
 **Architecture Decision:** Application Coordinator Pattern - recommended by game-architecture-optimizer
 
 ### Architectural Rationale
 
-**Why Four Stages?**
-Phase 2 is split into four sequential stages to maintain clean architecture throughout:
+**Why Five Stages?**
+Phase 2 is split into five sequential stages to maintain clean architecture throughout:
 
 1. **Stage 2A: PlayerController Extraction** (1-2 hours)
    - Moves existing player logic from Game.cs into proper PlayerController class
@@ -101,7 +101,15 @@ Phase 2 is split into four sequential stages to maintain clean architecture thro
    - Prevents cross-component coupling and incorrect update order
    - Makes physics integration straightforward
 
-3. **Stage 2B.0 Extended: Application Coordinator Pattern** (4-4.5 hours) - CRITICAL REFACTORING
+3. **OpenTK Abstraction Improvements** (2-3 hours) - OPTIONAL BUT RECOMMENDED
+   - Completes IRenderer interface with all rendering operations
+   - Creates ICameraView interface for read-only camera state
+   - Eliminates OpenTK coupling in core systems
+   - Improves testability with mockable interfaces
+   - Low cost (2-3 hours) but high architectural value
+   - Makes physics integration cleaner (physics queries camera via ICameraView)
+
+4. **Stage 2B.0 Extended: Application Coordinator Pattern** (4-4.5 hours) - CRITICAL REFACTORING
    - Eliminates "God Object" anti-pattern in Game.cs (335 lines doing 6 jobs)
    - Extracts business logic into 4 specialized coordinator classes
    - Reduces Game.cs to thin OpenTK adapter (~110 lines)
@@ -109,7 +117,7 @@ Phase 2 is split into four sequential stages to maintain clean architecture thro
    - **MUST HAPPEN BEFORE STAGE 2B** - prevents Game.cs ballooning to 500+ lines with physics
    - Saves 4+ hours of rework vs. adding physics first
 
-4. **Stage 2B: Physics Implementation** (3-4 hours)
+5. **Stage 2B: Physics Implementation** (3-4 hours)
    - Adds Jitter Physics 2 to the properly structured architecture
    - Physics integrates cleanly with ClientApplication coordinator
    - Clean separation between OpenTK lifecycle (Game.cs) and game logic (ClientApplication)
@@ -465,7 +473,7 @@ Stage 2A successfully extracted player logic into PlayerController, but two arch
 
 ### Stage 2B.0 Success Criteria
 
-Before proceeding to Stage 2B.0 Extended, verify:
+Before proceeding to OpenTK abstraction improvements, verify:
 - Build: 0 warnings, 0 errors
 - All player input (keyboard and mouse) routed through PlayerController
 - Game.cs OnUpdateFrame simplified to single _playerController.Update() call
@@ -473,11 +481,236 @@ Before proceeding to Stage 2B.0 Extended, verify:
 - Mouse look works identically to before
 - Hotbar, block breaking/placing still work
 - PlayerController.Update() orchestrates all subsystems in correct order
-- Clean foundation established for Game.cs refactoring
+- Clean foundation established for OpenTK abstraction improvements
 
 ---
 
-## Stage 2B.0 Extended: Application Coordinator Pattern (BLOCKED - Requires Stage 2B.0 Complete)
+## Stage 2B.0 OpenTK Abstraction Improvements (BLOCKED - Requires Stage 2B.0 Complete)
+
+**Goal:** Complete IRenderer abstraction and create ICameraView interface for cleaner architecture.
+
+**Estimated Duration:** 2-3 hours
+**Complexity:** Simple to Moderate
+**Why Critical:** Provides complete abstraction layer before physics, improves testability, eliminates OpenTK coupling in core systems
+
+**Architectural Rationale:**
+
+The game-architecture-optimizer reviewed the OpenTK abstraction quality and identified optional improvements that provide significant architectural benefits:
+
+1. **Incomplete IRenderer Interface:** Missing Render(), Update(), SetCamera(), and IDisposable
+   - Current state: Interface doesn't expose all rendering operations
+   - Problem: Systems must know about OpenTKRenderer concrete type
+   - Solution: Add all public methods to IRenderer interface
+
+2. **Camera State Coupling:** Systems cannot query camera position without OpenTK types
+   - Current state: Camera uses OpenTK.Mathematics.Vector3
+   - Problem: Raycasting, chunk loading, physics need camera position but shouldn't depend on OpenTK
+   - Solution: Create ICameraView interface with Shared.Vector3 for read-only camera state
+
+3. **Better Testability:** Cannot mock camera for unit tests
+   - Current state: Camera is concrete class with OpenTK dependencies
+   - Problem: Testing raycasting, chunk prioritization, physics requires real OpenTK context
+   - Solution: ICameraView allows mock implementations for testing
+
+**Benefits:**
+- Complete IRenderer contract - all rendering operations in interface
+- Camera state abstraction - systems query camera without OpenTK types
+- Better testability - can mock ICameraView for testing
+- Cleaner architecture - renderer interface is self-contained
+- Foundation for physics - physics can query camera position via ICameraView
+
+**Timing Rationale:**
+The architect recommended doing this BEFORE Stage 2B (Physics) because:
+- Low cost (2-3 hours)
+- High value (cleaner abstractions)
+- Makes physics integration cleaner (physics queries camera via ICameraView)
+- Easy to test without physics complexity
+- Prevents rework after physics is added
+
+### Task 2B.0.5: Improve IRenderer Abstraction Completeness
+**Status:** Ready
+**Priority:** HIGH
+**Estimated Time:** 60 minutes
+**Complexity:** SIMPLE to MODERATE
+
+**Description:** Add missing methods to IRenderer interface to expose all rendering operations.
+
+**Current State:**
+- IRenderer interface is incomplete (TerraNova.Core/IRenderer.cs)
+- Missing: Render(), Update(), SetCamera(), IDisposable
+- OpenTKRenderer implements these methods but they're not in interface
+- Systems must know about OpenTKRenderer concrete type
+
+**Implementation Steps:**
+1. Read TerraNova.Core/IRenderer.cs to see current interface
+2. Read TerraNova.Client/OpenTKRenderer.cs to identify missing public methods
+3. Add Render(int viewportWidth, int viewportHeight) method to IRenderer
+4. Add Update(double deltaTime) method to IRenderer
+5. Add SetCamera(ICameraView camera) method to IRenderer (will update parameter type in next task)
+6. Add IDisposable to interface inheritance: `public interface IRenderer : IDisposable`
+7. Verify OpenTKRenderer compiles (already implements these methods)
+8. Update GameEngine to use IRenderer interface type instead of OpenTKRenderer concrete type (if needed)
+9. Update ClientApplication to use IRenderer interface type (if needed)
+10. Build and verify no compilation errors
+
+**Completion Criteria:**
+- IRenderer interface declares Render(int viewportWidth, int viewportHeight) method
+- IRenderer interface declares Update(double deltaTime) method
+- IRenderer interface declares SetCamera(ICameraView camera) method
+- IRenderer inherits from IDisposable
+- OpenTKRenderer compiles without changes (already implements these methods)
+- GameEngine uses IRenderer interface type
+- ClientApplication uses IRenderer interface type (if applicable)
+- Build: 0 warnings, 0 errors
+
+**Files to Modify:**
+- `TerraNova.Core/IRenderer.cs` (add missing method signatures, add IDisposable inheritance)
+
+**Files to Reference (Read Only):**
+- `TerraNova.Client/OpenTKRenderer.cs` (identify existing public methods to add to interface)
+- `TerraNova.Client/Game.cs` (verify renderer usage)
+
+**Notes:**
+- This task only updates the interface - implementation already exists in OpenTKRenderer
+- SetCamera() will initially use Camera concrete type, will be changed to ICameraView in Task 2B.0.7
+- IDisposable is important for proper resource cleanup
+- This makes IRenderer a complete contract for rendering operations
+
+### Task 2B.0.6: Create ICameraView Interface
+**Status:** Blocked (requires Task 2B.0.5)
+**Priority:** HIGH
+**Estimated Time:** 30 minutes
+**Complexity:** SIMPLE
+
+**Description:** Create read-only camera state interface to allow systems to query camera position without OpenTK coupling.
+
+**Current State:**
+- Camera class uses OpenTK.Mathematics.Vector3 (TerraNova.Client/Camera.cs)
+- Systems (raycasting, chunk loading, physics) need camera position
+- Direct Camera dependency couples systems to OpenTK types
+- Cannot mock camera for unit tests
+
+**Implementation Steps:**
+1. Create new file: `TerraNova.Core/ICameraView.cs`
+2. Define interface with namespace TerraNova.Core
+3. Add Position property (read-only, type: Shared.Vector3)
+4. Add Front property (read-only, type: Shared.Vector3)
+5. Add XML documentation explaining purpose: "Read-only interface for querying camera state without OpenTK coupling"
+6. Open `TerraNova.Client/Camera.cs`
+7. Add ICameraView to Camera class inheritance: `public class Camera : ICameraView`
+8. Verify Camera.Position and Camera.Front are public and have getters
+9. Add conversion properties if Camera uses OpenTK.Mathematics.Vector3 internally:
+   - `Shared.Vector3 ICameraView.Position => new Shared.Vector3(Position.X, Position.Y, Position.Z);`
+   - `Shared.Vector3 ICameraView.Front => new Shared.Vector3(Front.X, Front.Y, Front.Z);`
+10. Build and verify no compilation errors
+
+**Completion Criteria:**
+- ICameraView.cs exists in TerraNova.Core project
+- Interface defines Position and Front properties (read-only, Shared.Vector3)
+- Camera class implements ICameraView interface
+- Camera provides Position and Front via ICameraView contract
+- XML documentation explains purpose
+- Build: 0 warnings, 0 errors
+
+**Files to Create:**
+- `TerraNova.Core/ICameraView.cs` (~20 lines)
+
+**Files to Modify:**
+- `TerraNova.Client/Camera.cs` (add ICameraView implementation)
+
+**Notes:**
+- Uses Shared.Vector3 (not OpenTK.Mathematics.Vector3) for platform independence
+- Read-only interface - systems cannot modify camera state via this interface
+- Camera may need conversion properties if it stores OpenTK types internally
+- Future systems (physics, AI, networking) can query camera without OpenTK dependency
+- Enables mock implementations for unit testing
+
+### Task 2B.0.7: Update OpenTKRenderer to Use ICameraView
+**Status:** Blocked (requires Task 2B.0.6)
+**Priority:** HIGH
+**Estimated Time:** 30 minutes
+**Complexity:** SIMPLE to MODERATE
+
+**Description:** Change OpenTKRenderer to accept ICameraView instead of concrete Camera class for better abstraction.
+
+**Current State:**
+- OpenTKRenderer.SetCameraReference() accepts Camera concrete class
+- Internal camera field stores Camera concrete type
+- Renderer directly depends on OpenTK-coupled Camera class
+- Cannot inject mock camera for testing
+
+**Implementation Steps:**
+1. Open `TerraNova.Client/OpenTKRenderer.cs`
+2. Find SetCameraReference() method (or SetCamera() if renamed in Task 2B.0.5)
+3. Change parameter type from `Camera` to `ICameraView`
+4. Update internal camera field type from `Camera` to `ICameraView`
+5. Update IRenderer interface to reflect parameter type change: `SetCamera(ICameraView camera)`
+6. Find all usages of camera field in OpenTKRenderer
+7. Verify camera field is only used for Position and Front properties (read-only access)
+8. Update any Vector3 conversions if needed (ICameraView uses Shared.Vector3, OpenGL uses OpenTK types)
+9. Open `TerraNova.Client/Game.cs` (or ClientApplication.cs if refactored)
+10. Find where Camera is passed to renderer.SetCamera()
+11. Verify Camera implements ICameraView (from Task 2B.0.6)
+12. No code changes needed in caller (Camera is already ICameraView)
+13. Build and verify no compilation errors
+14. Run game and verify rendering still works correctly
+
+**Completion Criteria:**
+- OpenTKRenderer.SetCamera() accepts ICameraView parameter (not Camera)
+- Internal camera field type is ICameraView
+- IRenderer.SetCamera() signature uses ICameraView parameter
+- All camera field usages compile correctly
+- Game.cs (or ClientApplication) passes Camera to renderer (works because Camera implements ICameraView)
+- Rendering works identically to before refactoring
+- No crashes or visual glitches
+- Build: 0 warnings, 0 errors
+
+**Files to Modify:**
+- `TerraNova.Core/IRenderer.cs` (update SetCamera() parameter type to ICameraView)
+- `TerraNova.Client/OpenTKRenderer.cs` (update SetCamera() parameter and internal field)
+
+**Files to Reference (Read Only):**
+- `TerraNova.Client/Game.cs` or `TerraNova.Client/ClientApplication.cs` (verify camera injection)
+
+**Notes:**
+- OpenTKRenderer may need to convert Shared.Vector3 to OpenTK.Mathematics.Vector3 for OpenGL calls
+- Camera still works as before, now accessed via ICameraView interface
+- This completes the abstraction layer - renderer no longer depends on concrete Camera type
+- Future: Can inject mock ICameraView for unit testing renderer behavior
+
+### Stage 2B.0 OpenTK Abstraction Success Criteria
+
+Before proceeding to Stage 2B.0 Extended (Application Coordinator Pattern), verify:
+- Build: 0 warnings, 0 errors
+- **IRenderer Interface Completeness:**
+  - Render() method in interface
+  - Update() method in interface
+  - SetCamera(ICameraView) method in interface
+  - IRenderer inherits from IDisposable
+  - OpenTKRenderer implements all interface methods
+- **ICameraView Interface:**
+  - ICameraView.cs exists in TerraNova.Core
+  - Position and Front properties use Shared.Vector3 (not OpenTK types)
+  - Camera implements ICameraView
+  - Can query camera state without OpenTK coupling
+- **OpenTKRenderer Abstraction:**
+  - SetCamera() accepts ICameraView parameter
+  - Internal camera field is ICameraView type
+  - No direct dependency on Camera concrete class
+- **Functionality (all working identically to before):**
+  - Rendering works correctly
+  - Camera movement works
+  - Block highlighting works
+  - No visual glitches or crashes
+- **Architecture Benefits:**
+  - Complete IRenderer contract for all rendering operations
+  - Camera state abstraction prevents OpenTK coupling
+  - Better testability - can mock ICameraView
+  - Clean foundation for physics integration
+
+---
+
+## Stage 2B.0 Extended: Application Coordinator Pattern (BLOCKED - Requires OpenTK Abstraction Complete)
 
 **Goal:** Refactor Game.cs from "God Object" anti-pattern to thin OpenTK adapter following Application Coordinator Pattern.
 
@@ -542,8 +775,8 @@ Four new coordinator classes handle business logic:
 - OnRenderFrame: 36 lines → 9 lines (75% reduction)
 - New coordinator classes: ~460 lines (well-organized, single-purpose)
 
-### Task 2B.0.5: Extract WindowStateManager
-**Status:** Ready
+### Task 2B.0.8: Extract WindowStateManager
+**Status:** Blocked (requires OpenTK Abstraction Complete)
 **Priority:** HIGH
 **Estimated Time:** 30 minutes
 **Complexity:** SIMPLE
@@ -580,8 +813,8 @@ Four new coordinator classes handle business logic:
 - WindowStateManager is stateful (tracks FPS history)
 - Future enhancements: window size tracking, fullscreen state, etc.
 
-### Task 2B.0.6: Extract UIManager
-**Status:** Blocked (requires Task 2B.0.5)
+### Task 2B.0.9: Extract UIManager
+**Status:** Blocked (requires Task 2B.0.8)
 **Priority:** HIGH
 **Estimated Time:** 45 minutes
 **Complexity:** SIMPLE to MODERATE
@@ -622,8 +855,8 @@ Four new coordinator classes handle business logic:
 - Future enhancements: health bar, inventory UI, debug overlay, etc.
 - Centralizing UI makes future UI features easier to add
 
-### Task 2B.0.7: Extract NetworkCoordinator (CRITICAL - Fixes Architectural Flaw)
-**Status:** Blocked (requires Task 2B.0.6)
+### Task 2B.0.10: Extract NetworkCoordinator (CRITICAL - Fixes Architectural Flaw)
+**Status:** Blocked (requires Task 2B.0.9)
 **Priority:** CRITICAL
 **Estimated Time:** 60 minutes
 **Complexity:** MODERATE to HIGH
@@ -674,8 +907,8 @@ Game.cs currently registers WorldReceived event handlers **inside OnUpdateFrame*
 - This is the most important task in Stage 2B.0 Extended
 - Future enhancements: connection retry logic, disconnect handling, etc.
 
-### Task 2B.0.8: Create ClientApplication Orchestrator
-**Status:** Blocked (requires Task 2B.0.7)
+### Task 2B.0.11: Create ClientApplication Orchestrator
+**Status:** Blocked (requires Task 2B.0.10)
 **Priority:** HIGH
 **Estimated Time:** 90 minutes
 **Complexity:** HIGH
@@ -745,8 +978,8 @@ Game.cs currently registers WorldReceived event handlers **inside OnUpdateFrame*
 - Take time to test thoroughly - this touches every system
 - Consider committing after this task (major architectural milestone)
 
-### Task 2B.0.9: Update Dependency Injection Container
-**Status:** Blocked (requires Task 2B.0.8)
+### Task 2B.0.12: Update Dependency Injection Container
+**Status:** Blocked (requires Task 2B.0.11)
 **Priority:** HIGH
 **Estimated Time:** 15 minutes
 **Complexity:** SIMPLE
@@ -1124,25 +1357,35 @@ Evaluate new issues discovered during implementation:
 9. Complete Task 2B.0.3 (Move Mouse Look) - 5 min (OPTIONAL)
 10. Verify Stage 2B.0 Success Criteria before proceeding
 
+### OpenTK Abstraction Improvements (2-3 hours): Clean Interfaces - RECOMMENDED
+11. Complete Task 2B.0.5 (Improve IRenderer Abstraction) - 60 min
+12. Complete Task 2B.0.6 (Create ICameraView Interface) - 30 min
+13. Complete Task 2B.0.7 (Update OpenTKRenderer to Use ICameraView) - 30 min
+14. Verify Stage 2B.0 OpenTK Abstraction Success Criteria before proceeding
+
 ### Stage 2B.0 Extended (4-4.5 hours): Application Coordinator Pattern - CRITICAL REFACTORING
-11. Complete Task 2B.0.5 (Extract WindowStateManager) - 30 min
-12. Complete Task 2B.0.6 (Extract UIManager) - 45 min
-13. Complete Task 2B.0.7 (Extract NetworkCoordinator) - 60 min (FIXES CRITICAL BUG)
-14. Complete Task 2B.0.8 (Create ClientApplication) - 90 min (MAJOR REFACTORING)
-15. Complete Task 2B.0.9 (Update DI Container) - 15 min
-16. Verify Stage 2B.0 Extended Success Criteria before proceeding
+15. Complete Task 2B.0.8 (Extract WindowStateManager) - 30 min
+16. Complete Task 2B.0.9 (Extract UIManager) - 45 min
+17. Complete Task 2B.0.10 (Extract NetworkCoordinator) - 60 min (FIXES CRITICAL BUG)
+18. Complete Task 2B.0.11 (Create ClientApplication) - 90 min (MAJOR REFACTORING)
+19. Complete Task 2B.0.12 (Update DI Container) - 15 min
+20. Verify Stage 2B.0 Extended Success Criteria before proceeding
 
 ### Stage 2B (3-4 hours): Physics Implementation
-17. Complete Task 2B.1 (Jitter Physics 2 Integration) - 30-45 min
-18. Complete Task 2B.2 (Implement Player Physics Body) - 45-60 min
-19. Complete Task 2B.3 (Add Terrain Collision) - 60-90 min (most complex)
-20. Complete Task 2B.4 (Implement Gravity and Jumping) - 30-45 min
-21. Verify Stage 2B Success Criteria
-22. (Optional) Fix distance metric mismatch if time permits
+21. Complete Task 2B.1 (Jitter Physics 2 Integration) - 30-45 min
+22. Complete Task 2B.2 (Implement Player Physics Body) - 45-60 min
+23. Complete Task 2B.3 (Add Terrain Collision) - 60-90 min (most complex)
+24. Complete Task 2B.4 (Implement Gravity and Jumping) - 30-45 min
+25. Verify Stage 2B Success Criteria
+26. (Optional) Fix distance metric mismatch if time permits
 
 **Why This Order Matters:**
 - Stage 2A establishes clean architecture BEFORE adding complexity
 - Stage 2B.0 fixes input routing architectural gaps
+- **OpenTK Abstraction Improvements provide clean interfaces BEFORE physics**
+- Complete IRenderer contract and ICameraView interface improve testability
+- Physics can query camera position without OpenTK coupling
+- Low cost (2-3 hours) but high architectural value
 - **Stage 2B.0 Extended eliminates "God Object" anti-pattern BEFORE physics**
 - Game.cs refactoring prevents 500+ line monster class
 - NetworkCoordinator fixes CRITICAL event registration bug (handlers in update loop)
@@ -1154,7 +1397,8 @@ Evaluate new issues discovered during implementation:
 
 **Expected Challenges:**
 - Task 2A.4 requires careful attention to ensure all logic is properly extracted
-- Task 2B.0.8 (ClientApplication) is the most complex refactoring - test thoroughly
+- Task 2B.0.6 (ICameraView) may require type conversion if Camera uses OpenTK types internally
+- Task 2B.0.11 (ClientApplication) is the most complex refactoring - test thoroughly
 - Task 2B.3 (terrain collision) will likely need iteration to handle edge cases
 - Physics tuning (Task 2B.4) is subjective - user testing is essential
 - Jitter2 documentation may be limited - expect some trial and error
@@ -1162,6 +1406,9 @@ Evaluate new issues discovered during implementation:
 **Success Metrics for Phase 2:**
 - Stage 2A: Game.cs reduced to ~300 lines, all player logic in PlayerController
 - Stage 2B.0: All input routed through PlayerController, proper Update() orchestration
+- **OpenTK Abstraction: Complete IRenderer interface, ICameraView created, OpenTK coupling eliminated**
+- **OpenTK Abstraction: Systems can query camera state without OpenTK types**
+- **OpenTK Abstraction: Better testability with mockable interfaces**
 - **Stage 2B.0 Extended: Game.cs reduced to ~110 lines, 4 coordinator classes created**
 - **Stage 2B.0 Extended: Network event bug fixed (no more handlers in update loop)**
 - Stage 2B: Physics-based movement feels natural and responsive

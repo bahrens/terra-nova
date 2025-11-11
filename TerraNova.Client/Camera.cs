@@ -1,18 +1,23 @@
 using OpenTK.Mathematics;
+using TerraNova.Core;
 
 namespace TerraNova;
 
 /// <summary>
 /// First-person camera with keyboard and mouse controls
 /// </summary>
-public class Camera
+public class Camera : ICameraView
 {
-    // Camera position and orientation
+    // Camera position and orientation (OpenTK vectors for internal use)
     public Vector3 Position { get; set; }
     public Vector3 Front => _front;  // Public accessor for camera direction
     private Vector3 _front = -Vector3.UnitZ;  // Direction camera is facing
     private Vector3 _up = Vector3.UnitY;      // Up direction
     private Vector3 _right = Vector3.UnitX;   // Right direction
+
+    // ICameraView implementation (platform-agnostic vectors for external use)
+    Shared.Vector3 ICameraView.Position => new Shared.Vector3(Position.X, Position.Y, Position.Z);
+    Shared.Vector3 ICameraView.Front => new Shared.Vector3(_front.X, _front.Y, _front.Z);
 
     // Rotation angles (in radians)
     private float _pitch = 0.0f;  // Up/down rotation
