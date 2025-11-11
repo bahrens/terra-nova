@@ -25,6 +25,7 @@ public class Game : GameWindow
     private readonly NetworkSettings _networkSettings;
     private readonly CameraSettings _cameraSettings;
     private readonly ILogger<Game> _logger;
+    private readonly ILoggerFactory _loggerFactory;
     private Crosshair _crosshair = null!;
     private Hotbar _hotbar = null!;
 
@@ -33,33 +34,21 @@ public class Game : GameWindow
     private OpenTKRenderer _renderer = null!;
     private GameEngine _gameEngine = null!;
 
+    // Player controller for input handling and interaction
+    private PlayerController? _playerController = null;
+
     // FPS tracking
     private double _fpsUpdateTimer = 0.0;
     private int _frameCount = 0;
     private double _fps = 0.0;
-
-    // Hotbar selection
-    private int _selectedHotbarSlot = 0; // 0-8 for slots 1-9
-    private readonly BlockType[] _hotbarBlocks = new BlockType[9]
-    {
-        BlockType.Grass,   // Slot 1
-        BlockType.Dirt,    // Slot 2
-        BlockType.Stone,   // Slot 3
-        BlockType.Wood,    // Slot 4
-        BlockType.Planks,  // Slot 5
-        BlockType.Sand,    // Slot 6
-        BlockType.Gravel,  // Slot 7
-        BlockType.Glass,   // Slot 8
-        BlockType.Leaves   // Slot 9
-    };
-    private BlockType SelectedBlockType => _hotbarBlocks[_selectedHotbarSlot];
 
     public Game(
         IOptions<GameSettings> gameSettings,
         IOptions<NetworkSettings> networkSettings,
         IOptions<CameraSettings> cameraSettings,
         INetworkClient networkClient,
-        ILogger<Game> logger)
+        ILogger<Game> logger,
+        ILoggerFactory loggerFactory)
         : base(GameWindowSettings.Default,
                new NativeWindowSettings()
                {
@@ -72,6 +61,7 @@ public class Game : GameWindow
         _networkSettings = networkSettings.Value;
         _cameraSettings = cameraSettings.Value;
         _logger = logger;
+        _loggerFactory = loggerFactory;
     }
 
     /// <summary>
@@ -106,12 +96,15 @@ public class Game : GameWindow
         // Note: GameEngine and Renderer will be created in OnUpdateFrame
         // after receiving world data from the network client
 
+        // Initialize PlayerController early (before UI) so we can access hotbar blocks
+        _playerController = new PlayerController(_camera, _networkClient, _loggerFactory.CreateLogger<PlayerController>());
+
         // Initialize UI overlays
         _crosshair = new Crosshair();
         _crosshair.Initialize(ClientSize.X, ClientSize.Y);
 
-        _hotbar = new Hotbar(_hotbarBlocks);
-        _hotbar.Initialize(ClientSize.X, ClientSize.Y, _selectedHotbarSlot);
+        _hotbar = new Hotbar(_playerController.HotbarBlocks);
+        _hotbar.Initialize(ClientSize.X, ClientSize.Y, _playerController.SelectedHotbarSlot);
 
         // Connect to server using configured settings
         _networkClient.Connect(_networkSettings.ServerHost, _networkSettings.ServerPort, _networkSettings.PlayerName);
@@ -168,22 +161,10 @@ public class Game : GameWindow
             }
         }
 
-        // Hotbar selection (keys 1-9)
-        int previousSlot = _selectedHotbarSlot;
-        if (KeyboardState.IsKeyPressed(Keys.D1)) _selectedHotbarSlot = 0;
-        if (KeyboardState.IsKeyPressed(Keys.D2)) _selectedHotbarSlot = 1;
-        if (KeyboardState.IsKeyPressed(Keys.D3)) _selectedHotbarSlot = 2;
-        if (KeyboardState.IsKeyPressed(Keys.D4)) _selectedHotbarSlot = 3;
-        if (KeyboardState.IsKeyPressed(Keys.D5)) _selectedHotbarSlot = 4;
-        if (KeyboardState.IsKeyPressed(Keys.D6)) _selectedHotbarSlot = 5;
-        if (KeyboardState.IsKeyPressed(Keys.D7)) _selectedHotbarSlot = 6;
-        if (KeyboardState.IsKeyPressed(Keys.D8)) _selectedHotbarSlot = 7;
-        if (KeyboardState.IsKeyPressed(Keys.D9)) _selectedHotbarSlot = 8;
-
-        // Update hotbar if selection changed
-        if (_selectedHotbarSlot != previousSlot)
+        // Hotbar selection (keys 1-9) - delegated to PlayerController
+        if (_playerController?.HandleHotbarSelection(KeyboardState) == true)
         {
-            _hotbar.UpdateSelectedSlot(_selectedHotbarSlot);
+            _hotbar.UpdateSelectedSlot(_playerController.SelectedHotbarSlot);
         }
 
         // Camera keyboard controls
@@ -210,7 +191,7 @@ public class Game : GameWindow
         {
             _logger.LogInformation("World received! Initializing GameEngine and Renderer...");
             _world = _networkClient.World;
-            _renderer = new OpenTKRenderer(_world);
+            _renderer = new OpenTKRenderer(_world, _loggerFactory.CreateLogger<OpenTKRenderer>());
             _renderer.Initialize();
             _renderer.SetCameraReference(_camera);
             _gameEngine = new GameEngine(_renderer);
@@ -247,10 +228,15 @@ public class Game : GameWindow
             _gameEngine.UpdatePlayerPosition(cameraPos);
         }
 
-        // Handle block interaction if world is loaded
+        // Perform raycast and handle block interaction (delegated to PlayerController)
         if (_networkClient.WorldReceived && _networkClient.World != null && _gameEngine != null)
         {
-            HandleBlockInteraction();
+            _playerController?.UpdateRaycast(_networkClient.World);
+            _playerController?.HandleBlockInteraction(MouseState, _networkClient.World);
+        }
+        else
+        {
+            _playerController?.UpdateRaycast(null);
         }
 
         // Update GameEngine (regenerates meshes if needed)
@@ -266,57 +252,6 @@ public class Game : GameWindow
         }
     }
 
-    private void HandleBlockInteraction()
-    {
-        // Left click - break block
-        if (MouseState.IsButtonPressed(MouseButton.Left))
-        {
-            var hit = Raycaster.Cast(_networkClient.World!, _camera.Position.ToShared(), _camera.Front.ToShared());
-            if (hit != null)
-            {
-                _logger.LogInformation("Breaking block at ({X},{Y},{Z})",
-                    hit.BlockPosition.X, hit.BlockPosition.Y, hit.BlockPosition.Z);
-
-                // Send update to server (set to Air to break)
-                _networkClient.SendBlockUpdate(
-                    hit.BlockPosition.X,
-                    hit.BlockPosition.Y,
-                    hit.BlockPosition.Z,
-                    BlockType.Air);
-            }
-        }
-
-        // Right click - place block
-        if (MouseState.IsButtonPressed(MouseButton.Right))
-        {
-            var hit = Raycaster.Cast(_networkClient.World!, _camera.Position.ToShared(), _camera.Front.ToShared());
-            if (hit != null)
-            {
-                // Calculate position to place the block (adjacent to hit face)
-                TerraNova.Shared.Vector3i placePos = GetAdjacentBlockPosition(hit.BlockPosition, hit.HitFace);
-
-                _logger.LogInformation("Placing {BlockType} at ({X},{Y},{Z})",
-                    SelectedBlockType, placePos.X, placePos.Y, placePos.Z);
-
-                // Send update to server with the selected block type
-                _networkClient.SendBlockUpdate(placePos.X, placePos.Y, placePos.Z, SelectedBlockType);
-            }
-        }
-    }
-
-    private TerraNova.Shared.Vector3i GetAdjacentBlockPosition(TerraNova.Shared.Vector3i blockPos, BlockFace face)
-    {
-        return face switch
-        {
-            BlockFace.Front => new TerraNova.Shared.Vector3i(blockPos.X, blockPos.Y, blockPos.Z + 1),
-            BlockFace.Back => new TerraNova.Shared.Vector3i(blockPos.X, blockPos.Y, blockPos.Z - 1),
-            BlockFace.Left => new TerraNova.Shared.Vector3i(blockPos.X - 1, blockPos.Y, blockPos.Z),
-            BlockFace.Right => new TerraNova.Shared.Vector3i(blockPos.X + 1, blockPos.Y, blockPos.Z),
-            BlockFace.Top => new TerraNova.Shared.Vector3i(blockPos.X, blockPos.Y + 1, blockPos.Z),
-            BlockFace.Bottom => new TerraNova.Shared.Vector3i(blockPos.X, blockPos.Y - 1, blockPos.Z),
-            _ => blockPos
-        };
-    }
 
     /// <summary>
     /// Called every frame to render graphics
@@ -329,15 +264,11 @@ public class Game : GameWindow
         // Clear the screen and depth buffer
         GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
-        // Find which block is selected (if any) for highlighting
+        // Use cached raycast result from PlayerController for block highlighting
         TerraNova.Shared.Vector3i? selectedBlockPos = null;
-        if (_networkClient.WorldReceived && _networkClient.World != null)
+        if (_playerController?.CachedRaycastHit != null)
         {
-            var hit = Raycaster.Cast(_networkClient.World, _camera.Position.ToShared(), _camera.Front.ToShared());
-            if (hit != null)
-            {
-                selectedBlockPos = hit.BlockPosition;
-            }
+            selectedBlockPos = _playerController.CachedRaycastHit.BlockPosition;
         }
 
         // Tell renderer which block to highlight

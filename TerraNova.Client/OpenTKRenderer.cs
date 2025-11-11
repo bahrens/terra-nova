@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using TerraNova.GameLogic;
@@ -17,6 +18,7 @@ public class OpenTKRenderer : IRenderer, IDisposable
 {
     private readonly Dictionary<SharedVector2i, ChunkMesh> _chunkMeshes = new();
     private readonly World _world;
+    private readonly ILogger<OpenTKRenderer> _logger;
     private Camera? _camera;
     private SharedVector3i? _highlightedBlock;
 
@@ -29,9 +31,10 @@ public class OpenTKRenderer : IRenderer, IDisposable
     private Shader _borderedShader = null!;
     private Texture _grassTexture = null!;
 
-    public OpenTKRenderer(World world)
+    public OpenTKRenderer(World world, ILogger<OpenTKRenderer> logger)
     {
         _world = world;
+        _logger = logger;
     }
 
     /// <summary>
@@ -125,19 +128,17 @@ public class OpenTKRenderer : IRenderer, IDisposable
             }
         }
 
-        // Unload distant chunk meshes and chunk data
+        // Unload distant chunk meshes (ChunkLoader handles World data cleanup)
         foreach (var chunkPos in chunksToUnload)
         {
             // Remove mesh from GPU
             RemoveChunk(chunkPos);
-
-            // Also remove chunk data from World to free memory
-            _world.RemoveChunk(chunkPos);
         }
 
         if (chunksToUnload.Count > 0)
         {
-            Console.WriteLine($"Unloaded {chunksToUnload.Count} distant chunks (meshes + data). Total meshes: {_chunkMeshes.Count}, Total world chunks: {_world.GetChunkCount()}");
+            _logger.LogInformation("Unloaded {ChunkCount} distant chunk meshes. Total meshes: {TotalMeshCount}",
+                chunksToUnload.Count, _chunkMeshes.Count);
         }
     }
 
