@@ -19,16 +19,6 @@ public class VoxelCollisionSystem
     private int _moveCallCount = 0;
     private const int LogEveryNMoves = 60; // Log every 60 move calls (roughly 1 second at 60 FPS)
 
-    // Velocity loss tracking
-    private float _totalDesiredHorizontalMovement = 0;
-    private float _totalActualHorizontalMovement = 0;
-    private int _horizontalMovementSamples = 0;
-
-    // Step-up performance tracking
-    private int _stepUpCallsThisFrame = 0;
-    private int _stepUpIterationsThisFrame = 0;
-    private int _totalVoxelQueriesThisFrame = 0;
-
     public VoxelCollisionSystem(World world, ILogger<VoxelCollisionSystem>? logger = null)
     {
         _world = world;
@@ -81,29 +71,11 @@ public class VoxelCollisionSystem
             );
         }
 
-        // Reset step-up tracking for this frame
-        _stepUpCallsThisFrame = 0;
-        _stepUpIterationsThisFrame = 0;
-        _totalVoxelQueriesThisFrame = 0;
-
-        // Perform swept collision detection (pass previous grounded state for step-up logic)
-        Vector3 actualMovement = SweepAABB(bodyAABB, desiredMovement, body.IsGrounded, out bool hitGround, shouldLog);
-
-        // Track velocity loss (horizontal movement only)
-        float desiredHorizontalDist = MathF.Sqrt(desiredMovement.X * desiredMovement.X + desiredMovement.Z * desiredMovement.Z);
-        float actualHorizontalDist = MathF.Sqrt(actualMovement.X * actualMovement.X + actualMovement.Z * actualMovement.Z);
-        if (desiredHorizontalDist > 0.0001f)
-        {
-            _totalDesiredHorizontalMovement += desiredHorizontalDist;
-            _totalActualHorizontalMovement += actualHorizontalDist;
-            _horizontalMovementSamples++;
-        }
+        // Perform swept collision detection
+        Vector3 actualMovement = SweepAABB(bodyAABB, desiredMovement, out bool hitGround, shouldLog);
 
         if (shouldLog && _logger != null)
         {
-            float velocityRetention = desiredHorizontalDist > 0.0001f ? (actualHorizontalDist / desiredHorizontalDist * 100f) : 100f;
-            float avgVelocityRetention = _horizontalMovementSamples > 0 ? (_totalActualHorizontalMovement / _totalDesiredHorizontalMovement * 100f) : 100f;
-
             _logger.LogDebug(
                 "[COLLISION] Result: ActualMove=({AX:F3},{AY:F3},{AZ:F3}) " +
                 "HitGround={HitGround} NewPos=({NewX:F2},{NewY:F2},{NewZ:F2})",
@@ -113,29 +85,6 @@ public class VoxelCollisionSystem
                 body.Position.Y + actualMovement.Y,
                 body.Position.Z + actualMovement.Z
             );
-
-            _logger.LogDebug(
-                "[VELOCITY] Desired={Desired:F4}m Actual={Actual:F4}m Retention={Retention:F1}% " +
-                "AvgRetention={AvgRetention:F1}% (over {Samples} frames)",
-                desiredHorizontalDist, actualHorizontalDist, velocityRetention,
-                avgVelocityRetention, _horizontalMovementSamples
-            );
-
-            if (_stepUpCallsThisFrame > 0)
-            {
-                _logger.LogDebug(
-                    "[STEPUP] Calls={Calls} Iterations={Iterations} VoxelQueries={Queries}",
-                    _stepUpCallsThisFrame, _stepUpIterationsThisFrame, _totalVoxelQueriesThisFrame
-                );
-            }
-
-            // Reset velocity tracking after logging
-            if (_horizontalMovementSamples >= 60)
-            {
-                _totalDesiredHorizontalMovement = 0;
-                _totalActualHorizontalMovement = 0;
-                _horizontalMovementSamples = 0;
-            }
         }
 
         // Update grounded state
@@ -157,11 +106,10 @@ public class VoxelCollisionSystem
     /// </summary>
     /// <param name="aabb">The AABB to sweep</param>
     /// <param name="movement">Desired movement vector</param>
-    /// <param name="wasGroundedLastFrame">Whether the body was grounded in the previous frame (for step-up logic)</param>
     /// <param name="hitGround">Output: true if collided with ground below</param>
     /// <param name="shouldLog">Whether to log diagnostic information</param>
     /// <returns>Safe movement vector after collision resolution</returns>
-    private Vector3 SweepAABB(AABB aabb, Vector3 movement, bool wasGroundedLastFrame, out bool hitGround, bool shouldLog = false)
+    private Vector3 SweepAABB(AABB aabb, Vector3 movement, out bool hitGround, bool shouldLog = false)
     {
         hitGround = false;
 
@@ -175,9 +123,9 @@ public class VoxelCollisionSystem
 
         // Step 1: Move vertically (Y axis)
         float yMovement = MoveAlongAxis(ref aabb, remainingMovement, Axis.Y, out bool hitY, shouldLog ? "Y" : null);
-        if (hitY && movement.Y <= 0.001f) // Detect ground when moving down OR standing still with slight downward gravity
+        if (hitY && movement.Y < 0) // FIX: Check original movement, not remainingMovement
         {
-            hitGround = true; // Hit ground when moving down or standing on ground
+            hitGround = true; // Hit ground when moving down
         }
         remainingMovement.Y = 0; // Y movement consumed
 
@@ -189,7 +137,7 @@ public class VoxelCollisionSystem
         // FIX: Check if we had X movement in the ORIGINAL movement vector (before it was consumed)
         if (hitX && Math.Abs(movement.X) > 0.0001f)
         {
-            Vector3 stepUpResult = TryStepUp(aabb, new Vector3(movement.X, 0, 0), wasGroundedLastFrame);
+            Vector3 stepUpResult = TryStepUp(aabb, new Vector3(movement.X, 0, 0));
             if (stepUpResult.LengthSquared() > 0.0001f)
             {
                 // Step up successful, use that movement instead
@@ -211,7 +159,7 @@ public class VoxelCollisionSystem
         // FIX: Check if we had Z movement in the ORIGINAL movement vector (before it was consumed)
         if (hitZ && Math.Abs(movement.Z) > 0.0001f)
         {
-            Vector3 stepUpResult = TryStepUp(aabb, new Vector3(0, 0, movement.Z), wasGroundedLastFrame);
+            Vector3 stepUpResult = TryStepUp(aabb, new Vector3(0, 0, movement.Z));
             if (stepUpResult.LengthSquared() > 0.0001f)
             {
                 // Step up successful, use that movement instead
@@ -308,14 +256,12 @@ public class VoxelCollisionSystem
         }
 
         // Iterate through all voxels in sweep volume
-        int voxelQueriesThisAxis = 0;
         for (int x = minX; x <= maxX; x++)
         {
             for (int z = minZ; z <= maxZ; z++)
             {
                 // CRITICAL: Check if chunk is loaded before querying blocks
                 Vector2i chunkPos = new Vector2i(x >> 4, z >> 4); // Divide by 16
-                voxelQueriesThisAxis++;
                 if (!_world.HasChunk(chunkPos))
                 {
                     // Unloaded chunk = treat as solid wall (safe fallback)
@@ -336,7 +282,6 @@ public class VoxelCollisionSystem
 
                 for (int y = minY; y <= maxY; y++)
                 {
-                    voxelQueriesThisAxis++;
                     // Query block type
                     BlockType block = _world.GetBlock(x, y, z);
 
@@ -363,34 +308,24 @@ public class VoxelCollisionSystem
             }
         }
 
-        // Track voxel queries for diagnostics
-        _totalVoxelQueriesThisFrame += voxelQueriesThisAxis;
-
         // Calculate actual movement (stop at collision minus skin width)
         float actualMovement;
         if (foundCollision)
         {
             didCollide = true;
+            // Move to collision point, minus skin width to prevent overlap
             actualMovement = desiredMovement * closestCollisionTime;
-
-            // CRITICAL FIX: Only apply SkinWidth when moving INTO a collision (collisionTime > threshold)
-            // Don't apply when already touching/overlapping (collisionTime ≈ 0)
-            // This prevents velocity loss from SkinWidth accumulation every frame
-            if (closestCollisionTime > 0.01f) // Only if collision is >1% of movement distance
-            {
-                if (desiredMovement > 0)
-                    actualMovement = Math.Max(0, actualMovement - SkinWidth);
-                else
-                    actualMovement = Math.Min(0, actualMovement + SkinWidth);
-            }
+            if (desiredMovement > 0)
+                actualMovement = Math.Max(0, actualMovement - SkinWidth);
+            else
+                actualMovement = Math.Min(0, actualMovement + SkinWidth);
 
             if (axisLabel != null && _logger != null)
             {
                 _logger.LogDebug(
                     "[COLLISION] {Axis} HIT: collisionTime={Time:F3} " +
-                    "desired={Desired:F3} actual={Actual:F3} skinApplied={SkinApplied}",
-                    axisLabel, closestCollisionTime, desiredMovement, actualMovement,
-                    closestCollisionTime > 0.01f
+                    "desired={Desired:F3} actual={Actual:F3} (stopped)",
+                    axisLabel, closestCollisionTime, desiredMovement, actualMovement
                 );
             }
         }
@@ -489,32 +424,19 @@ public class VoxelCollisionSystem
     /// </summary>
     /// <param name="aabb">Current AABB position</param>
     /// <param name="horizontalMovement">Desired horizontal movement (X or Z only, Y should be 0)</param>
-    /// <param name="isGrounded">Whether the player is currently on the ground</param>
     /// <returns>Combined movement vector (horizontal + vertical step), or zero if step failed</returns>
-    private Vector3 TryStepUp(AABB aabb, Vector3 horizontalMovement, bool isGrounded)
+    private Vector3 TryStepUp(AABB aabb, Vector3 horizontalMovement)
     {
-        // Only allow stepping up when on the ground (prevent wall-climbing while jumping)
-        if (!isGrounded)
-            return Vector3.Zero;
+        // Try stepping up in small increments (0.1 block increments up to MaxStepHeight)
+        const float stepIncrement = 0.1f;
 
-        // Track step-up diagnostics
-        _stepUpCallsThisFrame++;
-
-        // OPTIMIZATION: Try only 2-3 step heights instead of 5 (60% reduction in voxel queries)
-        // This catches stairs (0.5m) and half-blocks (0.25m) which are the most common cases
-        // Try smaller step first (more common), then larger step
-        float[] stepHeights = { 0.25f, 0.5f };
-
-        for (int i = 0; i < stepHeights.Length; i++)
+        for (float stepHeight = stepIncrement; stepHeight <= MaxStepHeight; stepHeight += stepIncrement)
         {
-            float stepHeight = stepHeights[i];
-            _stepUpIterationsThisFrame++;
-
             // Move up by step height
             AABB steppedAABB = aabb.Offset(new Vector3(0, stepHeight, 0));
 
-            // Try horizontal movement at this height (pass true since we're already testing step-up)
-            Vector3 testMovement = SweepAABB(steppedAABB, horizontalMovement, true, out bool _, false);
+            // Try horizontal movement at this height
+            Vector3 testMovement = SweepAABB(steppedAABB, horizontalMovement, out bool _);
 
             // Check if we got meaningful horizontal movement (at least 90% of desired)
             float desiredHorizontalDist = new Vector3(horizontalMovement.X, 0, horizontalMovement.Z).Length;
