@@ -13,7 +13,9 @@ public class VoxelCollisionSystem
     private readonly World _world;
     private readonly ILogger<VoxelCollisionSystem>? _logger;
     private const float SkinWidth = 0.001f; // Small margin to prevent tunneling through voxels (reduced to minimize jitter)
-    private const float MaxStepHeight = 0.5f; // Maximum height the player can step up (one half-block)
+
+    // Auto-jump time tracking (simple monotonic counter for cooldown)
+    private float _autoJumpTimeCounter = 0f;
 
     // Diagnostic state
     private int _moveCallCount = 0;
@@ -36,6 +38,9 @@ public class VoxelCollisionSystem
     {
         if (body.Shape == null)
             return body.Position;
+
+        // Update time counter for auto-jump cooldown
+        _autoJumpTimeCounter += deltaTime;
 
         _moveCallCount++;
         bool shouldLog = (_moveCallCount % LogEveryNMoves) == 0;
@@ -71,8 +76,8 @@ public class VoxelCollisionSystem
             );
         }
 
-        // Perform swept collision detection
-        Vector3 actualMovement = SweepAABB(bodyAABB, desiredMovement, out bool hitGround, shouldLog);
+        // Perform swept collision detection (pass body for auto-jump triggering)
+        Vector3 actualMovement = SweepAABB(bodyAABB, desiredMovement, body, out bool hitGround, shouldLog);
 
         if (shouldLog && _logger != null)
         {
@@ -103,13 +108,15 @@ public class VoxelCollisionSystem
     /// <summary>
     /// Sweep an AABB through the world and resolve collisions.
     /// Uses axis-by-axis collision detection for stable sliding along surfaces.
+    /// Triggers auto-jump when grounded player walks into climbable ledges.
     /// </summary>
     /// <param name="aabb">The AABB to sweep</param>
     /// <param name="movement">Desired movement vector</param>
+    /// <param name="body">Physics body (for auto-jump triggering, can be null for internal tests)</param>
     /// <param name="hitGround">Output: true if collided with ground below</param>
     /// <param name="shouldLog">Whether to log diagnostic information</param>
     /// <returns>Safe movement vector after collision resolution</returns>
-    private Vector3 SweepAABB(AABB aabb, Vector3 movement, out bool hitGround, bool shouldLog = false)
+    private Vector3 SweepAABB(AABB aabb, Vector3 movement, VoxelPhysicsBody? body, out bool hitGround, bool shouldLog = false)
     {
         hitGround = false;
 
@@ -133,20 +140,20 @@ public class VoxelCollisionSystem
         float xMovement = MoveAlongAxis(ref aabb, remainingMovement, Axis.X, out bool hitX, shouldLog ? "X" : null);
         remainingMovement.X = 0; // X movement consumed
 
-        // Step 3: If X movement blocked, try stepping up
-        // FIX: Check if we had X movement in the ORIGINAL movement vector (before it was consumed)
-        if (hitX && Math.Abs(movement.X) > 0.0001f)
+        // Step 3: If X movement blocked, check for auto-jump trigger
+        if (hitX && Math.Abs(movement.X) > 0.0001f && body != null)
         {
-            Vector3 stepUpResult = TryStepUp(aabb, new Vector3(movement.X, 0, 0));
-            if (stepUpResult.LengthSquared() > 0.0001f)
+            if (ShouldAutoJump(aabb, new Vector3(movement.X, 0, 0), hitGround))
             {
-                // Step up successful, use that movement instead
-                aabb = aabb.Offset(stepUpResult);
-                xMovement = stepUpResult.X;
-                yMovement += stepUpResult.Y;
-                if (shouldLog && _logger != null)
+                // Trigger auto-jump! (uses same smooth jump as spacebar)
+                // Note: We need a time source - use a simple frame counter for now
+                float currentTime = _autoJumpTimeCounter;
+                if (body.TryStartAutoJump(5.0f, 0.3f, currentTime))
                 {
-                    _logger.LogDebug("[COLLISION] Step-up on X: height={Height:F2}", stepUpResult.Y);
+                    if (shouldLog && _logger != null)
+                    {
+                        _logger.LogDebug("[COLLISION] Auto-jump triggered on X axis (climbable ledge detected)");
+                    }
                 }
             }
         }
@@ -155,20 +162,19 @@ public class VoxelCollisionSystem
         float zMovement = MoveAlongAxis(ref aabb, remainingMovement, Axis.Z, out bool hitZ, shouldLog ? "Z" : null);
         remainingMovement.Z = 0; // Z movement consumed
 
-        // Step 5: If Z movement blocked, try stepping up
-        // FIX: Check if we had Z movement in the ORIGINAL movement vector (before it was consumed)
-        if (hitZ && Math.Abs(movement.Z) > 0.0001f)
+        // Step 5: If Z movement blocked, check for auto-jump trigger
+        if (hitZ && Math.Abs(movement.Z) > 0.0001f && body != null)
         {
-            Vector3 stepUpResult = TryStepUp(aabb, new Vector3(0, 0, movement.Z));
-            if (stepUpResult.LengthSquared() > 0.0001f)
+            if (ShouldAutoJump(aabb, new Vector3(0, 0, movement.Z), hitGround))
             {
-                // Step up successful, use that movement instead
-                aabb = aabb.Offset(stepUpResult);
-                zMovement = stepUpResult.Z;
-                yMovement += stepUpResult.Y;
-                if (shouldLog && _logger != null)
+                // Trigger auto-jump!
+                float currentTime = _autoJumpTimeCounter;
+                if (body.TryStartAutoJump(5.0f, 0.3f, currentTime))
                 {
-                    _logger.LogDebug("[COLLISION] Step-up on Z: height={Height:F2}", stepUpResult.Y);
+                    if (shouldLog && _logger != null)
+                    {
+                        _logger.LogDebug("[COLLISION] Auto-jump triggered on Z axis (climbable ledge detected)");
+                    }
                 }
             }
         }
@@ -419,38 +425,43 @@ public class VoxelCollisionSystem
     }
 
     /// <summary>
-    /// Try to step up when horizontal movement is blocked.
-    /// Simulates climbing stairs by lifting the player up to MaxStepHeight.
+    /// Check if there's a climbable ledge in front of the player that should trigger auto-jump.
+    /// Tests at 0.25m (half-slab) and 0.5m (full block) heights.
+    /// Returns true for ledges, false for walls.
     /// </summary>
     /// <param name="aabb">Current AABB position</param>
     /// <param name="horizontalMovement">Desired horizontal movement (X or Z only, Y should be 0)</param>
-    /// <returns>Combined movement vector (horizontal + vertical step), or zero if step failed</returns>
-    private Vector3 TryStepUp(AABB aabb, Vector3 horizontalMovement)
+    /// <param name="isGrounded">Whether the body is currently grounded</param>
+    /// <returns>True if should auto-jump (climbable ledge), false if wall or already airborne</returns>
+    private bool ShouldAutoJump(AABB aabb, Vector3 horizontalMovement, bool isGrounded)
     {
-        // Try stepping up in small increments (0.1 block increments up to MaxStepHeight)
-        const float stepIncrement = 0.1f;
+        // Only auto-jump when grounded (prevents mid-air climbing)
+        if (!isGrounded)
+            return false;
 
-        for (float stepHeight = stepIncrement; stepHeight <= MaxStepHeight; stepHeight += stepIncrement)
+        // Only auto-jump for small obstacles (0.25m to 0.5m)
+        // Don't auto-jump for tall walls
+        float[] testHeights = { 0.25f, 0.5f };
+
+        foreach (float height in testHeights)
         {
-            // Move up by step height
-            AABB steppedAABB = aabb.Offset(new Vector3(0, stepHeight, 0));
+            // Test if there's space to move forward at this height
+            AABB testAABB = aabb.Offset(new Vector3(0, height, 0));
+            // Internal test - no body parameter (no auto-jump triggering in recursive calls)
+            Vector3 testMovement = SweepAABB(testAABB, horizontalMovement, null, out bool _);
 
-            // Try horizontal movement at this height
-            Vector3 testMovement = SweepAABB(steppedAABB, horizontalMovement, out bool _);
+            // Calculate how much horizontal movement we achieved
+            float desiredDist = new Vector3(horizontalMovement.X, 0, horizontalMovement.Z).Length;
+            float actualDist = new Vector3(testMovement.X, 0, testMovement.Z).Length;
 
-            // Check if we got meaningful horizontal movement (at least 90% of desired)
-            float desiredHorizontalDist = new Vector3(horizontalMovement.X, 0, horizontalMovement.Z).Length;
-            float actualHorizontalDist = new Vector3(testMovement.X, 0, testMovement.Z).Length;
-
-            if (actualHorizontalDist >= desiredHorizontalDist * 0.9f)
+            // If we can move forward at this height, it's a climbable ledge
+            if (actualDist >= desiredDist * 0.85f)
             {
-                // Step up successful! Return combined vertical + horizontal movement
-                return new Vector3(testMovement.X, stepHeight, testMovement.Z);
+                return true; // Climbable ledge detected - trigger auto-jump!
             }
         }
 
-        // Couldn't step up (obstacle too high or no improvement)
-        return Vector3.Zero;
+        return false; // No climbable ledge - it's a wall
     }
 
     private enum Axis

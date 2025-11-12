@@ -220,13 +220,15 @@ public class PlayerController
             _physicsBody.Velocity = new Shared.Vector3(0, currentVelocity.Y, 0);
         }
 
-        // Jumping with IsGrounded check
+        // Jumping with IsGrounded check - use smooth jump system
         if (keyboardState.IsKeyPressed(Keys.Space) && _physicsBody.IsGrounded)
         {
-            // Apply jump impulse (instant upward velocity)
-            float jumpVelocity = 6.5f; // Jump strength
-            Shared.Vector3 vel = _physicsBody.Velocity;
-            _physicsBody.Velocity = new Shared.Vector3(vel.X, jumpVelocity, vel.Z);
+            // Cast to VoxelPhysicsBody to access smooth jump method
+            if (_physicsBody is TerraNova.Physics.VoxelPhysicsBody voxelBody)
+            {
+                // Use same smooth jump as auto-jump (5.0 m/s reaches ~1.25m height)
+                voxelBody.StartJump(5.0f, 0.3f);
+            }
         }
     }
 

@@ -37,7 +37,11 @@ public class VoxelPhysicsWorld : IPhysicsWorld
             if (body.IsStatic)
                 continue;
 
-            // Apply gravity if enabled
+            // CRITICAL: Update smooth jump physics BEFORE gravity
+            // This allows jump acceleration to override gravity during the jump phase
+            body.UpdateJumpPhysics(deltaTime);
+
+            // Apply gravity if enabled (after jump physics, so gravity takes over after jump)
             if (body.AffectedByGravity)
             {
                 body.Velocity += _gravity * deltaTime;
