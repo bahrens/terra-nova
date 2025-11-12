@@ -199,17 +199,26 @@ public class PlayerController
         if (keyboardState.IsKeyDown(Keys.D))
             moveDirection += cameraRight;
 
-        // Normalize to prevent faster diagonal movement
+        // Set horizontal velocity based on input (preserve vertical velocity for gravity/jumping)
+        Shared.Vector3 currentVelocity = _physicsBody.Velocity;
+
         if (moveDirection.LengthSquared() > 0.01f)
+        {
+            // Normalize to prevent faster diagonal movement
             moveDirection = Shared.Vector3.Normalize(moveDirection);
 
-        // Set horizontal velocity (preserve vertical velocity for gravity/jumping)
-        Shared.Vector3 currentVelocity = _physicsBody.Velocity;
-        _physicsBody.Velocity = new Shared.Vector3(
-            moveDirection.X * moveSpeed,
-            currentVelocity.Y, // Preserve vertical velocity
-            moveDirection.Z * moveSpeed
-        );
+            // Apply movement velocity
+            _physicsBody.Velocity = new Shared.Vector3(
+                moveDirection.X * moveSpeed,
+                currentVelocity.Y, // Preserve vertical velocity
+                moveDirection.Z * moveSpeed
+            );
+        }
+        else
+        {
+            // No input: stop horizontal movement immediately (Minecraft-style instant stop)
+            _physicsBody.Velocity = new Shared.Vector3(0, currentVelocity.Y, 0);
+        }
 
         // Jumping with IsGrounded check
         if (keyboardState.IsKeyPressed(Keys.Space) && _physicsBody.IsGrounded)
@@ -219,8 +228,17 @@ public class PlayerController
             Shared.Vector3 vel = _physicsBody.Velocity;
             _physicsBody.Velocity = new Shared.Vector3(vel.X, jumpVelocity, vel.Z);
         }
+    }
 
-        // Sync camera position with physics body (add eye height offset)
+    /// <summary>
+    /// Sync camera position to physics body position (call AFTER physics step).
+    /// This must be called after the physics simulation has stepped to avoid visual lag.
+    /// </summary>
+    public void SyncCameraToPhysics()
+    {
+        if (_physicsBody == null)
+            return;
+
         Shared.Vector3 bodyPos = _physicsBody.Position;
         _camera.Position = new OpenTK.Mathematics.Vector3(bodyPos.X, bodyPos.Y + 0.8f, bodyPos.Z);
     }

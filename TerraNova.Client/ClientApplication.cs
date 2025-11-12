@@ -39,6 +39,14 @@ public class ClientApplication : IDisposable
     // Frame counter for periodic diagnostics
     private int _frameCount = 0;
 
+    // DeltaTime variance tracking
+    private readonly List<double> _deltaTimeSamples = new();
+    private const int MaxDeltaTimeSamples = 60;
+
+    // Fixed timestep physics
+    private const float FixedDeltaTime = 1.0f / 60.0f; // 60 Hz physics
+    private float _physicsTimeAccumulator = 0f;
+
     public ClientApplication(
         INetworkClient networkClient,
         IOptions<NetworkSettings> networkSettings,
@@ -106,10 +114,35 @@ public class ClientApplication : IDisposable
             InitializeWorldSystems();
         }
 
-        // Step physics simulation
+        // CRITICAL FIX: Handle input BEFORE physics step to avoid 1-frame lag
+        // Update player controller (input, raycasting, block interaction)
+        int previousHotbarSlot = _playerController.SelectedHotbarSlot;
+        _playerController.Update(keyboardState, mouseState, _world, deltaTime);
+
+        // Step physics simulation (using current frame's input)
         if (_physicsWorld != null)
         {
-            _physicsWorld.Step((float)deltaTime);
+            // Track deltaTime variance for diagnostics
+            _deltaTimeSamples.Add(deltaTime);
+            if (_deltaTimeSamples.Count > MaxDeltaTimeSamples)
+                _deltaTimeSamples.RemoveAt(0);
+
+            // FIXED TIMESTEP PHYSICS (eliminates jitter from variable deltaTime)
+            // Accumulate frame time
+            _physicsTimeAccumulator += (float)deltaTime;
+
+            // Step physics in fixed increments for deterministic behavior
+            int stepsThisFrame = 0;
+            const int maxStepsPerFrame = 5; // Prevent "spiral of death" at low FPS
+            while (_physicsTimeAccumulator >= FixedDeltaTime && stepsThisFrame < maxStepsPerFrame)
+            {
+                _physicsWorld.Step(FixedDeltaTime);
+                _physicsTimeAccumulator -= FixedDeltaTime;
+                stepsThisFrame++;
+            }
+
+            // Sync camera to physics body position (must happen AFTER all physics steps)
+            _playerController.SyncCameraToPhysics();
 
             // Periodic diagnostic logging (every 60 frames to avoid spam)
             _frameCount++;
@@ -123,12 +156,26 @@ public class ClientApplication : IDisposable
                         playerPos.Value.X, playerPos.Value.Y, playerPos.Value.Z,
                         playerVel.Value.X, playerVel.Value.Y, playerVel.Value.Z);
                 }
+
+                // Log deltaTime variance
+                if (_deltaTimeSamples.Count >= 60)
+                {
+                    double avgDelta = _deltaTimeSamples.Average();
+                    double minDelta = _deltaTimeSamples.Min();
+                    double maxDelta = _deltaTimeSamples.Max();
+                    double variance = _deltaTimeSamples.Average(d => Math.Pow(d - avgDelta, 2));
+                    double stdDev = Math.Sqrt(variance);
+
+                    _logger.LogDebug(
+                        "[DELTATIME] avg={Avg:F3}ms min={Min:F3}ms max={Max:F3}ms stddev={StdDev:F3}ms " +
+                        "variance={Variance:F1}% | PhysicsSteps={Steps} Accumulator={Accum:F3}ms",
+                        avgDelta * 1000, minDelta * 1000, maxDelta * 1000, stdDev * 1000,
+                        (stdDev / avgDelta * 100),
+                        stepsThisFrame, _physicsTimeAccumulator * 1000
+                    );
+                }
             }
         }
-
-        // Update player controller (input, raycasting, block interaction)
-        int previousHotbarSlot = _playerController.SelectedHotbarSlot;
-        _playerController.Update(keyboardState, mouseState, _world, deltaTime);
 
         // Update UI if hotbar selection changed
         if (_playerController.SelectedHotbarSlot != previousHotbarSlot)
