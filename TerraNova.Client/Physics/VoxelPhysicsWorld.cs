@@ -96,7 +96,7 @@ public class VoxelPhysicsWorld : IPhysicsWorld
 
     public IPhysicsBody CreateBody()
     {
-        var body = new VoxelPhysicsBody();
+        var body = new VoxelPhysicsBody(_collisionLogger);
         AddBody(body);
         return body;
     }

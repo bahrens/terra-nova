@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using TerraNova.Core;
 using TerraNova.Shared;
 
@@ -15,6 +16,7 @@ public class VoxelPhysicsBody : IPhysicsBody
     private bool _isStatic;
     private VoxelPhysicsShape? _shape;
     private bool _isGrounded;
+    private ILogger? _logger;
 
     // Smooth jump state (using ease-in cubic for natural upward acceleration)
     private bool _isJumping;
@@ -26,7 +28,7 @@ public class VoxelPhysicsBody : IPhysicsBody
     private float _lastAutoJumpTime;
     private const float AutoJumpCooldown = 0.5f; // 500ms between auto-jumps
 
-    public VoxelPhysicsBody()
+    public VoxelPhysicsBody(ILogger? logger = null)
     {
         _position = Vector3.Zero;
         _velocity = Vector3.Zero;
@@ -38,6 +40,7 @@ public class VoxelPhysicsBody : IPhysicsBody
         _jumpDuration = 0f;
         _jumpElapsedTime = 0f;
         _lastAutoJumpTime = -AutoJumpCooldown; // Allow immediate first auto-jump
+        _logger = logger;
     }
 
     public Vector3 Position
@@ -131,10 +134,19 @@ public class VoxelPhysicsBody : IPhysicsBody
     /// <returns>True if auto-jump started, false if on cooldown</returns>
     public bool TryStartAutoJump(float startVelocity, float duration, float currentTime)
     {
+        _logger?.LogInformation("[AUTO-JUMP BODY] TryStartAutoJump called: currentTime={CurrentTime:F2}, lastAutoJumpTime={LastTime:F2}, cooldown={Cooldown:F2}",
+            currentTime, _lastAutoJumpTime, AutoJumpCooldown);
+        _logger?.LogInformation("[AUTO-JUMP BODY] Time since last auto-jump: {TimeSince:F2}s (cooldown: {Cooldown:F2}s)",
+            currentTime - _lastAutoJumpTime, AutoJumpCooldown);
+
         // Check cooldown
         if ((currentTime - _lastAutoJumpTime) < AutoJumpCooldown)
+        {
+            _logger?.LogInformation("[AUTO-JUMP BODY] Auto-jump BLOCKED by cooldown");
             return false;
+        }
 
+        _logger?.LogInformation("[AUTO-JUMP BODY] Auto-jump ALLOWED - starting jump!");
         _lastAutoJumpTime = currentTime;
         StartJump(startVelocity, duration);
         return true;

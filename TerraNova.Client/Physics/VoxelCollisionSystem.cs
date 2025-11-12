@@ -137,46 +137,84 @@ public class VoxelCollisionSystem
         remainingMovement.Y = 0; // Y movement consumed
 
         // Step 2: Move horizontally (X axis)
+        // Save original AABB before X movement for auto-jump testing
+        AABB originalAABB = aabb;
         float xMovement = MoveAlongAxis(ref aabb, remainingMovement, Axis.X, out bool hitX, shouldLog ? "X" : null);
         remainingMovement.X = 0; // X movement consumed
 
         // Step 3: If X movement blocked, check for auto-jump trigger
         if (hitX && Math.Abs(movement.X) > 0.0001f && body != null)
         {
-            if (ShouldAutoJump(aabb, new Vector3(movement.X, 0, 0), hitGround))
+            _logger?.LogInformation("[AUTO-JUMP] X-axis collision detected, movement.X={MovementX:F3}, checking auto-jump conditions...", movement.X);
+            _logger?.LogInformation("[AUTO-JUMP] hitGround={HitGround}, body!=null={BodyNotNull}", hitGround, body != null);
+
+            // Use original AABB (before X movement) for auto-jump testing
+            // This allows us to test if elevated positions can move forward
+            if (ShouldAutoJump(originalAABB, new Vector3(movement.X, 0, 0), hitGround))
             {
+                _logger?.LogInformation("[AUTO-JUMP] ShouldAutoJump returned TRUE! Attempting to trigger auto-jump...");
+
                 // Trigger auto-jump! (uses same smooth jump as spacebar)
                 // Note: We need a time source - use a simple frame counter for now
                 float currentTime = _autoJumpTimeCounter;
-                if (body.TryStartAutoJump(5.0f, 0.3f, currentTime))
+                if (body?.TryStartAutoJump(5.0f, 0.3f, currentTime) == true)
                 {
-                    if (shouldLog && _logger != null)
-                    {
-                        _logger.LogDebug("[COLLISION] Auto-jump triggered on X axis (climbable ledge detected)");
-                    }
+                    _logger?.LogInformation("[AUTO-JUMP] SUCCESS! Auto-jump triggered on X axis (climbable ledge detected)");
+                }
+                else
+                {
+                    _logger?.LogInformation("[AUTO-JUMP] FAILED! Auto-jump on cooldown (last={Last:F2}, current={Current:F2})",
+                        currentTime - 0.5f, currentTime);
                 }
             }
+            else
+            {
+                _logger?.LogInformation("[AUTO-JUMP] ShouldAutoJump returned FALSE (wall detected, not climbable)");
+            }
+        }
+        else if (hitX && Math.Abs(movement.X) > 0.0001f)
+        {
+            _logger?.LogInformation("[AUTO-JUMP] X-axis collision but body is null - no auto-jump check");
         }
 
         // Step 4: Move horizontally (Z axis)
+        // Save original AABB before Z movement for auto-jump testing
+        AABB originalAABBZ = aabb;
         float zMovement = MoveAlongAxis(ref aabb, remainingMovement, Axis.Z, out bool hitZ, shouldLog ? "Z" : null);
         remainingMovement.Z = 0; // Z movement consumed
 
         // Step 5: If Z movement blocked, check for auto-jump trigger
         if (hitZ && Math.Abs(movement.Z) > 0.0001f && body != null)
         {
-            if (ShouldAutoJump(aabb, new Vector3(0, 0, movement.Z), hitGround))
+            _logger?.LogInformation("[AUTO-JUMP] Z-axis collision detected, movement.Z={MovementZ:F3}, checking auto-jump conditions...", movement.Z);
+            _logger?.LogInformation("[AUTO-JUMP] hitGround={HitGround}, body!=null={BodyNotNull}", hitGround, body != null);
+
+            // Use original AABB (before Z movement) for auto-jump testing
+            // This allows us to test if elevated positions can move forward
+            if (ShouldAutoJump(originalAABBZ, new Vector3(0, 0, movement.Z), hitGround))
             {
+                _logger?.LogInformation("[AUTO-JUMP] ShouldAutoJump returned TRUE! Attempting to trigger auto-jump...");
+
                 // Trigger auto-jump!
                 float currentTime = _autoJumpTimeCounter;
-                if (body.TryStartAutoJump(5.0f, 0.3f, currentTime))
+                if (body?.TryStartAutoJump(5.0f, 0.3f, currentTime) == true)
                 {
-                    if (shouldLog && _logger != null)
-                    {
-                        _logger.LogDebug("[COLLISION] Auto-jump triggered on Z axis (climbable ledge detected)");
-                    }
+                    _logger?.LogInformation("[AUTO-JUMP] SUCCESS! Auto-jump triggered on Z axis (climbable ledge detected)");
+                }
+                else
+                {
+                    _logger?.LogInformation("[AUTO-JUMP] FAILED! Auto-jump on cooldown (last={Last:F2}, current={Current:F2})",
+                        currentTime - 0.5f, currentTime);
                 }
             }
+            else
+            {
+                _logger?.LogInformation("[AUTO-JUMP] ShouldAutoJump returned FALSE (wall detected, not climbable)");
+            }
+        }
+        else if (hitZ && Math.Abs(movement.Z) > 0.0001f)
+        {
+            _logger?.LogInformation("[AUTO-JUMP] Z-axis collision but body is null - no auto-jump check");
         }
 
         return new Vector3(xMovement, yMovement, zMovement);
@@ -435,18 +473,31 @@ public class VoxelCollisionSystem
     /// <returns>True if should auto-jump (climbable ledge), false if wall or already airborne</returns>
     private bool ShouldAutoJump(AABB aabb, Vector3 horizontalMovement, bool isGrounded)
     {
+        _logger?.LogInformation("[AUTO-JUMP] ShouldAutoJump: isGrounded={IsGrounded}, horizontalMovement=({X:F3},{Y:F3},{Z:F3})",
+            isGrounded, horizontalMovement.X, horizontalMovement.Y, horizontalMovement.Z);
+        _logger?.LogInformation("[AUTO-JUMP] Current AABB: Min=({MinX:F2},{MinY:F2},{MinZ:F2}) Max=({MaxX:F2},{MaxY:F2},{MaxZ:F2})",
+            aabb.Min.X, aabb.Min.Y, aabb.Min.Z, aabb.Max.X, aabb.Max.Y, aabb.Max.Z);
+
         // Only auto-jump when grounded (prevents mid-air climbing)
         if (!isGrounded)
+        {
+            _logger?.LogInformation("[AUTO-JUMP] Not grounded - returning false");
             return false;
+        }
 
         // Only auto-jump for small obstacles (0.25m to 0.5m)
         // Don't auto-jump for tall walls
-        float[] testHeights = { 0.25f, 0.5f };
+        float[] testHeights = { 0.25f, 0.5f, 1.0f };  // Test up to 1 block high
 
         foreach (float height in testHeights)
         {
+            _logger?.LogInformation("[AUTO-JUMP] Testing height {Height}m above current position...", height);
+
             // Test if there's space to move forward at this height
             AABB testAABB = aabb.Offset(new Vector3(0, height, 0));
+            _logger?.LogInformation("[AUTO-JUMP] Test AABB at +{Height}m: Min=({MinX:F2},{MinY:F2},{MinZ:F2}) Max=({MaxX:F2},{MaxY:F2},{MaxZ:F2})",
+                height, testAABB.Min.X, testAABB.Min.Y, testAABB.Min.Z, testAABB.Max.X, testAABB.Max.Y, testAABB.Max.Z);
+
             // Internal test - no body parameter (no auto-jump triggering in recursive calls)
             Vector3 testMovement = SweepAABB(testAABB, horizontalMovement, null, out bool _);
 
@@ -454,13 +505,18 @@ public class VoxelCollisionSystem
             float desiredDist = new Vector3(horizontalMovement.X, 0, horizontalMovement.Z).Length;
             float actualDist = new Vector3(testMovement.X, 0, testMovement.Z).Length;
 
+            _logger?.LogInformation("[AUTO-JUMP] At height {Height}m: desired={Desired:F3}, actual={Actual:F3}, ratio={Ratio:F2}%",
+                height, desiredDist, actualDist, (actualDist / desiredDist) * 100.0f);
+
             // If we can move forward at this height, it's a climbable ledge
             if (actualDist >= desiredDist * 0.85f)
             {
+                _logger?.LogInformation("[AUTO-JUMP] Climbable ledge detected at {Height}m - returning TRUE!", height);
                 return true; // Climbable ledge detected - trigger auto-jump!
             }
         }
 
+        _logger?.LogInformation("[AUTO-JUMP] No climbable ledge found - returning FALSE (wall detected)");
         return false; // No climbable ledge - it's a wall
     }
 
