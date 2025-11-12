@@ -75,11 +75,11 @@
 
 ## Phase 2: PlayerController & Physics System (IN PROGRESS)
 
-**Goal:** Extract player logic into clean architecture, then implement Jitter Physics 2 for movement and collision detection.
+**Goal:** Extract player logic into clean architecture, then implement Jitter Physics 2 with proper abstraction layer for movement and collision detection.
 
 **Prerequisites:** ✅ Phase 1 complete - stable foundation established
 
-**Estimated Duration:** 10.5-13.5 hours total (1-2 hours Stage 2A + 25-30 min Stage 2B.0 + 2-3 hours OpenTK Abstraction + 4-4.5 hours Stage 2B.0 Extended + 3-4 hours Stage 2B)
+**Estimated Duration:** 12-15 hours total (1-2 hours Stage 2A + 25-30 min Stage 2B.0 + 2-3 hours OpenTK Abstraction + 4-4.5 hours Stage 2B.0 Extended + 4.5-5.5 hours Stage 2B with abstraction)
 **Priority:** HIGH - Core gameplay feature
 **Architecture Decision:** Application Coordinator Pattern - recommended by game-architecture-optimizer
 
@@ -1075,42 +1075,143 @@ Before proceeding to Stage 2B (Physics), verify:
 
 ## Stage 2B: Physics Implementation (BLOCKED - Requires Stage 2B.0 Extended Complete)
 
-**Goal:** Implement Jitter Physics 2 in the properly structured PlayerController.
+**Goal:** Implement Jitter Physics 2 with proper abstraction layer to enable future physics engine swapping.
 
-**Estimated Duration:** 3-4 hours
+**Estimated Duration:** 4.5-5.5 hours (includes abstraction layer creation)
 **Complexity:** Medium to High
 **Why Second:** Physics code goes into architecturally correct location from day 1
+**Architecture Decision:** Create physics abstraction layer (IPhysicsWorld, IPhysicsBody, etc.) BEFORE integrating Jitter2
+
+**Architectural Rationale:**
+
+Following the same pattern established for OpenTK rendering (IRenderer, ICameraView), physics must be hidden behind abstractions:
+- **Interfaces in Core project:** IPhysicsWorld, IPhysicsBody, IPhysicsShape, IPhysicsShapeFactory
+- **Implementation in Client project:** JitterPhysicsWorld, JitterPhysicsBody, etc.
+- **Benefits:** Swappable physics engine, better testability, platform-agnostic Core project
+
+**Reference Document:** `.claude/physics-abstraction-architecture.md` (comprehensive architecture analysis)
+
+### Task 2B.0: Create Physics Abstraction Layer
+**Status:** Ready (MUST DO BEFORE 2B.1)
+**Priority:** CRITICAL
+**Estimated Time:** 45-60 minutes
+**Complexity:** Simple to Moderate
+
+**Description:** Create physics interfaces in Core project to abstract physics engine implementation.
+
+**Architectural Context:**
+This task establishes the same abstraction pattern as IRenderer/ICameraView. All physics interfaces belong in TerraNova.Core (platform-agnostic), with Jitter2-specific implementations in TerraNova.Client. This enables future physics engine swapping without changing game logic.
+
+**Implementation Steps:**
+1. Create `TerraNova.Core/IPhysicsWorld.cs`:
+   - Methods: Step(float deltaTime), CreateBody(), RemoveBody(), SetGravity(), Raycast()
+   - Purpose: Manages physics simulation world
+2. Create `TerraNova.Core/IPhysicsBody.cs`:
+   - Properties: Position, Velocity, IsGravityEnabled, Mass, IsGrounded, Tag
+   - Methods: ApplyForce(Vector3), ApplyImpulse(Vector3)
+   - Purpose: Represents rigid body in physics simulation
+3. Create `TerraNova.Core/IPhysicsShape.cs`:
+   - Enum: PhysicsShapeType (Box, Capsule, Sphere)
+   - Property: ShapeType
+   - Purpose: Defines collision shape geometry
+4. Create `TerraNova.Core/IPhysicsShapeFactory.cs`:
+   - Methods: CreateBox(), CreateCapsule(), CreateSphere()
+   - Purpose: Factory for creating physics shapes
+5. Create `TerraNova.Core/PhysicsHitInfo.cs`:
+   - Struct with: Body, HitPoint, Normal, Distance
+   - Purpose: Raycast result data structure
+6. Add comprehensive XML documentation to all interfaces
+7. Build Core project and verify 0 warnings, 0 errors
+
+**Completion Criteria:**
+- All 5 physics interfaces/types exist in TerraNova.Core
+- Interfaces follow same pattern as IRenderer/ICameraView (no implementation, pure contracts)
+- No Jitter2 or any physics engine references in Core project
+- XML documentation explains abstraction purpose and use cases
+- Core project builds successfully with 0 warnings, 0 errors
+- Interfaces support all Stage 2B requirements:
+  - Task 2B.2: CreateCapsule() for player body, ApplyForce() for movement
+  - Task 2B.3: CreateBox() for terrain, CreateBody() for static blocks
+  - Task 2B.4: SetGravity(), Raycast() for ground detection, ApplyImpulse() for jumping
+
+**Files to Create:**
+- `TerraNova.Core/IPhysicsWorld.cs` (~60 lines with XML docs)
+- `TerraNova.Core/IPhysicsBody.cs` (~80 lines with XML docs)
+- `TerraNova.Core/IPhysicsShape.cs` (~25 lines with XML docs)
+- `TerraNova.Core/IPhysicsShapeFactory.cs` (~40 lines with XML docs)
+- `TerraNova.Core/PhysicsHitInfo.cs` (~30 lines with XML docs)
+
+**Reference:**
+See `.claude/physics-abstraction-architecture.md` for complete interface definitions and architectural rationale.
+
+**Rationale:**
+Creating abstractions BEFORE integrating Jitter2 ensures clean architecture from day 1. Refactoring after Jitter2 is integrated is much harder and riskier. This matches the proven approach used for IRenderer/ICameraView.
 
 ### Task 2B.1: Integrate Jitter Physics 2 Library
-**Status:** Blocked (requires Stage 2A complete)
+**Status:** Blocked (requires Task 2B.0)
 **Priority:** HIGH
-**Estimated Time:** 30-45 minutes
-**Complexity:** Simple
+**Estimated Time:** 60-90 minutes (increased from 30-45 due to adapter implementation)
+**Complexity:** Moderate (increased from Simple)
 
-**Description:** Install Jitter Physics 2 NuGet package and initialize physics world in PlayerController.
+**Description:** Install Jitter2 and create adapter classes implementing Core physics interfaces.
+
+**Architectural Context:**
+This task creates the Jitter2-specific implementation layer in TerraNova.Client, following the same pattern as OpenTKRenderer implementing IRenderer. All Jitter2 types must be encapsulated in adapter classes - PlayerController will depend only on Core interfaces.
 
 **Implementation Steps:**
 1. Add Jitter2 NuGet package to TerraNova.Client project
-2. Add physics World instance to PlayerController
-3. Initialize physics world in PlayerController constructor
-4. Add physics world step to PlayerController.Update() method
-5. Verify physics world runs without errors
+2. Create `TerraNova.Client/JitterPhysicsWorld.cs` implementing IPhysicsWorld:
+   - Wrap Jitter2.World instance (private field)
+   - Implement Step() by calling jitterWorld.Step(deltaTime)
+   - Implement CreateBody() by creating Jitter RigidBody, wrapping in JitterPhysicsBody
+   - Implement RemoveBody() by removing from Jitter world
+   - Implement SetGravity() by setting Jitter world gravity
+   - Implement Raycast() by using Jitter ray query, converting to PhysicsHitInfo
+   - Add ILogger dependency for diagnostics
+3. Create `TerraNova.Client/JitterPhysicsBody.cs` implementing IPhysicsBody:
+   - Wrap Jitter2.RigidBody instance (private field)
+   - Implement Position/Velocity by accessing/setting Jitter body properties
+   - Implement ApplyForce/ApplyImpulse by calling Jitter body methods
+   - Implement IsGrounded by raycasting downward (or caching collision contacts)
+   - Handle coordinate system conversions if needed
+4. Create `TerraNova.Client/JitterPhysicsShape.cs` implementing IPhysicsShape:
+   - Wrap Jitter2.Shape instances (BoxShape, CapsuleShape, SphereShape)
+   - Store PhysicsShapeType enum value
+   - Provide internal access to wrapped Jitter shape for world integration
+5. Create `TerraNova.Client/JitterShapeFactory.cs` implementing IPhysicsShapeFactory:
+   - Implement CreateBox() using Jitter2.BoxShape constructor
+   - Implement CreateCapsule() using Jitter2.CapsuleShape constructor
+   - Implement CreateSphere() using Jitter2.SphereShape constructor
+   - Return JitterPhysicsShape wrappers (not raw Jitter shapes)
+6. Add IPhysicsWorld parameter to PlayerController constructor
+7. Call physicsWorld.Step(deltaTime) in PlayerController.Update()
+8. Build and verify functionality
 
 **Completion Criteria:**
-- Jitter2 NuGet package installed and builds successfully
-- Physics World initialized in PlayerController
-- Physics simulation steps each frame (even if no bodies yet)
-- No compilation errors or runtime exceptions
+- Jitter2 NuGet package installed successfully in Client project
+- All 4 adapter classes implemented (JitterPhysicsWorld, JitterPhysicsBody, JitterPhysicsShape, JitterShapeFactory)
+- All adapter classes fully implement Core interfaces (no missing methods)
+- PlayerController depends on IPhysicsWorld interface (NOT JitterPhysicsWorld concrete type)
+- Physics simulation steps each frame without errors
 - Log output confirms physics world is updating
+- **CRITICAL:** No Jitter2 types exposed in PlayerController (fully encapsulated in adapters)
+- Build: 0 warnings, 0 errors
+
+**Files to Create:**
+- `TerraNova.Client/JitterPhysicsWorld.cs` (~150 lines)
+- `TerraNova.Client/JitterPhysicsBody.cs` (~120 lines)
+- `TerraNova.Client/JitterPhysicsShape.cs` (~50 lines)
+- `TerraNova.Client/JitterShapeFactory.cs` (~80 lines)
 
 **Files to Modify:**
-- `TerraNova.Client/TerraNova.Client.csproj` (NuGet reference)
-- `TerraNova.Client/PlayerController.cs` (add physics World, initialization, update)
+- `TerraNova.Client/TerraNova.Client.csproj` (add Jitter2 NuGet reference)
+- `TerraNova.Client/PlayerController.cs` (add IPhysicsWorld dependency, call Step())
 
 **Notes:**
-- Jitter2 is a lightweight, pure C# physics engine (no native dependencies)
-- Physics World owned by PlayerController (not Game.cs)
-- Start with minimal configuration; optimization comes later
+- Jitter2 coordinate system may differ from game coordinate system - handle conversions in adapter
+- JitterPhysicsWorld owns Jitter2.World instance lifecycle (implement IDisposable properly)
+- Keep ALL Jitter2-specific code in Client project - Core project must stay clean
+- This is now the foundational task for physics integration (abstractions already in place from 2B.0)
 
 ### Task 2B.2: Implement Player Physics Body
 **Status:** Blocked (requires Task 2B.1)
@@ -1118,31 +1219,42 @@ Before proceeding to Stage 2B (Physics), verify:
 **Estimated Time:** 45-60 minutes
 **Complexity:** Medium
 
-**Description:** Add physics body (capsule) to PlayerController and implement force-based WASD movement.
+**Description:** Add physics body (capsule) to PlayerController using IPhysicsWorld interface.
+
+**Architectural Context:**
+PlayerController uses ONLY Core interfaces (IPhysicsWorld, IPhysicsBody, IPhysicsShapeFactory). No direct Jitter2 dependencies allowed - this enables physics engine swapping without changing PlayerController code.
 
 **Implementation Steps:**
-1. Create capsule rigid body in PlayerController
-2. Add capsule to physics world
-3. Position capsule at camera position
-4. Implement force-based movement in PlayerController.Update()
-5. Synchronize camera position with physics body position each frame
-6. Disable/replace direct position manipulation
+1. Inject IPhysicsShapeFactory into PlayerController constructor (alongside IPhysicsWorld)
+2. Create capsule shape using factory: `var capsuleShape = shapeFactory.CreateCapsule(radius: 0.3f, height: 1.6f);`
+3. Create dynamic physics body: `_playerBody = physicsWorld.CreateBody(capsuleShape, camera.Position, isStatic: false);`
+4. Store IPhysicsBody reference in PlayerController field
+5. Update HandleMovementInput() to use force-based movement:
+   - Calculate movement direction from WASD input
+   - Call `_playerBody.ApplyForce(movementForce)` instead of direct camera position changes
+6. In PlayerController.Update(), synchronize camera position with physics body:
+   - `camera.Position = _playerBody.Position + eyeOffset;` (eye offset for first-person view)
+7. Remove previous direct position manipulation code
+8. Build and test movement (floating is OK - no terrain collision yet)
 
 **Completion Criteria:**
-- Player represented by capsule physics body
-- WASD movement works via physics forces
-- Camera position follows physics body
+- Player represented by capsule physics body (via IPhysicsBody interface)
+- WASD movement works via `IPhysicsBody.ApplyForce()` (no direct position manipulation)
+- Camera position follows `IPhysicsBody.Position` each frame
 - Player can move around (floating is OK - no terrain collision yet)
+- **CRITICAL:** PlayerController depends ONLY on IPhysicsWorld/IPhysicsBody/IPhysicsShapeFactory (no Jitter2 types)
 - No crashes or physics exceptions
 - Build: 0 warnings, 0 errors
 
 **Files to Modify:**
-- `TerraNova.Client/PlayerController.cs` (add physics body, force-based movement)
+- `TerraNova.Client/PlayerController.cs` (add IPhysicsShapeFactory dependency, create player body, force-based movement)
 
 **Notes:**
-- Use capsule shape (cylinder with rounded ends) - standard for FPS characters
+- Capsule dimensions: radius 0.3m, height 1.6m (standard FPS character size)
+- Eye offset: typically 1.5m above capsule bottom for first-person view
 - Initial movement may feel floaty - fine-tuning comes in Task 2B.4
-- Player will still pass through terrain until Task 2B.3
+- Player will pass through terrain until Task 2B.3 (collision shapes not added yet)
+- Physics engine remains completely swappable through interfaces
 
 ### Task 2B.3: Add Terrain Collision Detection
 **Status:** Blocked (requires Task 2B.2)
@@ -1150,34 +1262,56 @@ Before proceeding to Stage 2B (Physics), verify:
 **Estimated Time:** 60-90 minutes
 **Complexity:** High
 
-**Description:** Create physics collision shapes for terrain blocks so player collides with world.
+**Description:** Create physics collision shapes for terrain blocks using IPhysicsWorld interface.
+
+**Architectural Context:**
+Terrain collision management uses ONLY IPhysicsWorld and IPhysicsShapeFactory interfaces. Static physics bodies are created for each solid block near the player. All collision shape management must remain physics-engine-agnostic.
 
 **Implementation Steps:**
-1. Implement system to add box collision shapes for solid blocks near player
-2. Add collision shapes for all non-Air blocks within interaction range
-3. Handle chunk loading/unloading - add/remove collision shapes dynamically
-4. Synchronize physics bodies when blocks are broken/placed
-5. Test collision detection with various terrain configurations
+1. Create helper class `TerraNova.Client/TerrainCollisionManager.cs`:
+   - Constructor: accepts IPhysicsWorld, IPhysicsShapeFactory, ILogger
+   - Field: `Dictionary<Vector3i, IPhysicsBody> _blockBodies` to track collision bodies
+   - Method: `AddBlockCollision(Vector3i blockPos)` - creates static box body
+   - Method: `RemoveBlockCollision(Vector3i blockPos)` - removes and disposes body
+2. In AddBlockCollision():
+   - Create box shape: `var boxShape = _shapeFactory.CreateBox(1f, 1f, 1f);` (1x1x1 block)
+   - Create static body: `var body = _physicsWorld.CreateBody(boxShape, blockPos, isStatic: true);`
+   - Store in dictionary: `_blockBodies[blockPos] = body;`
+3. Integrate into PlayerController:
+   - Add TerrainCollisionManager field
+   - On chunk loaded event: Iterate non-Air blocks within range, call AddBlockCollision()
+   - On chunk unloaded event: Iterate blocks, call RemoveBlockCollision()
+   - On block broken: Call RemoveBlockCollision(brokenBlockPos)
+   - On block placed: Call AddBlockCollision(placedBlockPos)
+4. Implement collision range optimization (only load blocks within 16 blocks of player)
+5. Test collision detection: walk on terrain, verify no clipping through walls/floor
 
 **Completion Criteria:**
 - Player collides with terrain blocks and cannot walk through them
-- Player can walk on top of blocks
-- Collision shapes load/unload with chunks properly
-- No performance issues with collision detection
+- Player can walk on top of blocks (physics capsule rests on box collision shapes)
+- Collision shapes load/unload with chunks properly (no memory leaks)
+- Block breaking removes collision shape immediately
+- Block placement adds collision shape immediately
+- Only blocks within 16 blocks of player have collision shapes (performance optimization)
+- No performance issues with collision detection (60 FPS maintained)
 - Player cannot fall through floor or clip through walls
+- **CRITICAL:** TerrainCollisionManager uses ONLY IPhysicsWorld/IPhysicsShapeFactory (no Jitter2 types)
 - Build: 0 warnings, 0 errors
 
-**Files to Modify:**
-- `TerraNova.Client/PlayerController.cs` (manage terrain collision shapes in physics world)
+**Files to Create:**
+- `TerraNova.Client/TerrainCollisionManager.cs` (~150 lines)
 
-**Files to Potentially Create:**
-- `TerraNova.Client/TerrainPhysicsManager.cs` (helper class if needed)
+**Files to Modify:**
+- `TerraNova.Client/PlayerController.cs` (integrate TerrainCollisionManager, subscribe to chunk/block events)
 
 **Notes:**
-- Only add collision shapes for blocks near player (performance optimization)
-- Each block = simple box shape (not full mesh collision)
-- Hook into existing chunk loading system
-- This is the most complex task in Phase 2
+- Static bodies for terrain (isStatic: true) - no physics simulation overhead
+- Box shape dimensions: 1x1x1 (exact block size)
+- Range optimization: Only blocks within 16 blocks get collision (reduces physics body count)
+- Hook into existing chunk loading callbacks from GameEngine
+- Dictionary tracks block positions for quick removal when chunks unload
+- This is the most complex task in Stage 2B - thorough testing required
+- Physics engine remains completely swappable through interfaces
 
 ### Task 2B.4: Implement Gravity and Jumping
 **Status:** Blocked (requires Task 2B.3)
@@ -1185,43 +1319,99 @@ Before proceeding to Stage 2B (Physics), verify:
 **Estimated Time:** 30-45 minutes
 **Complexity:** Simple
 
-**Description:** Add gravity to player physics body and implement spacebar jumping with ground detection.
+**Description:** Add gravity and jumping using IPhysicsBody and IPhysicsWorld interfaces.
+
+**Architectural Context:**
+Gravity and jumping use ONLY Core interfaces (IPhysicsWorld, IPhysicsBody). Ground detection uses IPhysicsWorld.Raycast() or IPhysicsBody.IsGrounded property. All physics operations remain engine-agnostic.
 
 **Implementation Steps:**
-1. Enable gravity on player physics body
-2. Implement ground detection (raycast downward from capsule)
-3. Add jump mechanic (apply upward impulse when spacebar pressed AND grounded)
-4. Tune gravity strength and jump force for Minecraft-like feel
-5. Prevent bunny-hopping (jumping while airborne)
+1. Configure gravity in physics world:
+   - Call `_physicsWorld.SetGravity(new Vector3(0, -32f, 0));` (Minecraft-like gravity)
+2. Enable gravity on player body:
+   - Set `_playerBody.IsGravityEnabled = true;`
+3. Implement ground detection (choose one approach):
+   - **Option A:** Use `_physicsWorld.Raycast()` downward from player position (0.1m below capsule bottom)
+   - **Option B:** Use `_playerBody.IsGrounded` property (if Jitter adapter implements collision tracking)
+4. Update HandleMovementInput() to add jump mechanic:
+   - Check if spacebar pressed AND player is grounded
+   - If true: `_playerBody.ApplyImpulse(new Vector3(0, jumpForce, 0));`
+5. Tune jump force for Minecraft-like feel:
+   - Start with jumpForce = 8f (approximately 1.25 block jump height)
+   - Adjust based on testing
+6. Prevent bunny-hopping: Only allow jump when IsGrounded is true
+7. Test gravity and jumping feel, tune values as needed
 
 **Completion Criteria:**
-- Player falls downward when not on solid ground
-- Player lands on terrain and stops falling
-- Spacebar makes player jump when on ground
-- Cannot jump while already in air
-- Jump height and gravity feel similar to Minecraft
-- Smooth, responsive controls
+- Player falls downward when not on solid ground (gravity working via IPhysicsWorld.SetGravity)
+- Player lands on terrain and stops falling (collision working from Task 2B.3)
+- Spacebar makes player jump when on ground (via IPhysicsBody.ApplyImpulse)
+- Cannot jump while already in air (ground detection prevents bunny-hopping)
+- Jump height approximately 1.25 blocks (Minecraft reference)
+- Gravity feels natural (~32 m/s² downward acceleration)
+- Smooth, responsive controls (no lag or jittering)
+- **CRITICAL:** Uses ONLY IPhysicsWorld/IPhysicsBody interfaces (no Jitter2 types)
 - Build: 0 warnings, 0 errors
 
 **Files to Modify:**
-- `TerraNova.Client/PlayerController.cs` (add gravity, jumping logic, ground detection)
+- `TerraNova.Client/PlayerController.cs` (configure gravity, add jumping logic, ground detection)
 
 **Notes:**
-- Minecraft gravity: ~32 blocks/sec² (use as reference)
-- Minecraft jump height: ~1.25 blocks (use as reference)
-- Ground detection: raycast slightly below capsule bottom
-- Fine-tuning these values is critical for good game feel
+- Minecraft gravity reference: 32 blocks/sec² (0, -32, 0 in world space)
+- Minecraft jump height reference: 1.25 blocks (jumpForce ≈ 8f with gravity -32)
+- Ground detection: Raycast 0.1m below capsule bottom, or use IsGrounded property
+- Fine-tuning jump force and gravity is critical for good game feel
+- Test values may need adjustment based on capsule mass and physics engine behavior
+- Physics engine remains completely swappable through interfaces
 
 ### Stage 2B Success Criteria
 
 Before marking Phase 2 complete, verify:
-- Build: 0 warnings, 0 errors
+
+**Architecture (CRITICAL - Physics Engine Abstraction):**
+- All physics interfaces exist in TerraNova.Core (IPhysicsWorld, IPhysicsBody, IPhysicsShape, IPhysicsShapeFactory, PhysicsHitInfo)
+- All Jitter2 adapter classes exist in TerraNova.Client (JitterPhysicsWorld, JitterPhysicsBody, JitterPhysicsShape, JitterShapeFactory)
+- PlayerController depends ONLY on Core interfaces (no Jitter2 types anywhere in PlayerController.cs)
+- TerrainCollisionManager (if created) depends ONLY on Core interfaces
+- Core project has ZERO references to Jitter2 NuGet package (physics engine agnostic)
+- Jitter2 package referenced ONLY in Client project
+- Physics abstractions follow same pattern as IRenderer/ICameraView (proven architecture)
+
+**Functionality:**
 - Physics-based movement feels natural and responsive
+- WASD movement works via IPhysicsBody.ApplyForce() (force-based, not direct position)
+- Camera position synchronized with IPhysicsBody.Position each frame
+- Player collides with terrain blocks (cannot walk through walls or floor)
+- Player can walk on top of blocks (collision detection working)
+- Gravity pulls player downward (IPhysicsWorld.SetGravity working)
+- Spacebar makes player jump when on ground (IPhysicsBody.ApplyImpulse working)
+- Cannot jump while airborne (ground detection prevents bunny-hopping)
+- Jump height approximately 1.25 blocks (Minecraft reference)
 - No clipping through terrain or falling through floor
-- Jump height and gravity feel similar to Minecraft
-- Performance remains smooth (60 FPS) with physics enabled
-- All Stage 2A functionality still works (hotbar, breaking, placing)
-- PlayerController contains all player logic including physics
+- All Stage 2A functionality still works (hotbar selection, block breaking/placing, block highlighting)
+
+**Performance:**
+- 60 FPS maintained with physics enabled (no performance regression)
+- Collision shapes load/unload efficiently with chunks (no memory leaks)
+- Only blocks within range have collision shapes (optimization working)
+
+**Code Quality:**
+- Build: 0 warnings, 0 errors
+- XML documentation on all physics interfaces
+- ILogger used for physics diagnostics
+- Proper resource disposal (IPhysicsWorld, physics bodies)
+
+**Testing:**
+- Test on flat terrain (basic movement and jumping)
+- Test on hills and stairs (collision detection on slopes)
+- Test block breaking/placing updates collision shapes
+- Test chunk loading/unloading removes collision shapes properly
+- Verify no console errors or physics exceptions
+
+**Future-Proofing:**
+- Physics engine is completely swappable (interfaces abstract all operations)
+- Can migrate to different physics engine by creating new adapter classes
+- No game logic needs changes to swap physics engines
+- Follows established project patterns (IRenderer proves this works)
 
 ### Optional Enhancement: Fix Distance Metric Mismatch
 **Status:** Optional (can be done anytime during Phase 2)
@@ -1371,13 +1561,14 @@ Evaluate new issues discovered during implementation:
 19. Complete Task 2B.0.12 (Update DI Container) - 15 min
 20. Verify Stage 2B.0 Extended Success Criteria before proceeding
 
-### Stage 2B (3-4 hours): Physics Implementation
-21. Complete Task 2B.1 (Jitter Physics 2 Integration) - 30-45 min
-22. Complete Task 2B.2 (Implement Player Physics Body) - 45-60 min
-23. Complete Task 2B.3 (Add Terrain Collision) - 60-90 min (most complex)
-24. Complete Task 2B.4 (Implement Gravity and Jumping) - 30-45 min
-25. Verify Stage 2B Success Criteria
-26. (Optional) Fix distance metric mismatch if time permits
+### Stage 2B (4.5-5.5 hours): Physics Implementation with Abstraction Layer
+21. Complete Task 2B.0 (Create Physics Abstraction Layer) - 45-60 min [NEW - CRITICAL]
+22. Complete Task 2B.1 (Jitter Physics 2 Integration) - 60-90 min [UPDATED]
+23. Complete Task 2B.2 (Implement Player Physics Body) - 45-60 min
+24. Complete Task 2B.3 (Add Terrain Collision) - 60-90 min (most complex)
+25. Complete Task 2B.4 (Implement Gravity and Jumping) - 30-45 min
+26. Verify Stage 2B Success Criteria (includes architecture verification)
+27. (Optional) Fix distance metric mismatch if time permits
 
 **Why This Order Matters:**
 - Stage 2A establishes clean architecture BEFORE adding complexity
@@ -1393,15 +1584,23 @@ Evaluate new issues discovered during implementation:
 - Physics integrates cleanly into ClientApplication coordinator
 - Refactoring now: 4 hours. Refactoring after physics: 8+ hours + high risk
 - Application Coordinator Pattern is industry standard game architecture
+- **Task 2B.0 creates physics abstraction layer BEFORE Jitter2 integration**
+- Physics interfaces in Core (IPhysicsWorld, IPhysicsBody, etc.) enable engine swapping
+- Jitter2 adapters in Client keep physics engine encapsulated
+- Follows proven IRenderer/ICameraView pattern
+- Additional 1-1.5 hours investment prevents future migration pain (8-16 hours saved)
 - Maintains Phase 1 principles throughout development
 
 **Expected Challenges:**
 - Task 2A.4 requires careful attention to ensure all logic is properly extracted
 - Task 2B.0.6 (ICameraView) may require type conversion if Camera uses OpenTK types internally
 - Task 2B.0.11 (ClientApplication) is the most complex refactoring - test thoroughly
+- **Task 2B.0 (Physics Abstraction):** Designing complete interfaces that support all Stage 2B requirements
+- **Task 2B.1 (Jitter2 Adapters):** Wrapping Jitter2 API properly, handling coordinate system conversions
 - Task 2B.3 (terrain collision) will likely need iteration to handle edge cases
 - Physics tuning (Task 2B.4) is subjective - user testing is essential
 - Jitter2 documentation may be limited - expect some trial and error
+- Ensuring NO Jitter2 types leak into PlayerController (requires discipline during implementation)
 
 **Success Metrics for Phase 2:**
 - Stage 2A: Game.cs reduced to ~300 lines, all player logic in PlayerController
@@ -1411,9 +1610,12 @@ Evaluate new issues discovered during implementation:
 - **OpenTK Abstraction: Better testability with mockable interfaces**
 - **Stage 2B.0 Extended: Game.cs reduced to ~110 lines, 4 coordinator classes created**
 - **Stage 2B.0 Extended: Network event bug fixed (no more handlers in update loop)**
+- **Task 2B.0: All physics interfaces in Core project (IPhysicsWorld, IPhysicsBody, IPhysicsShape, IPhysicsShapeFactory)**
+- **Task 2B.1: All Jitter2 adapters in Client project, PlayerController depends only on Core interfaces**
+- **Stage 2B: Physics engine completely swappable (no Jitter2 types in game logic)**
 - Stage 2B: Physics-based movement feels natural and responsive
 - No clipping through terrain or falling through floor
 - Jump height and gravity feel similar to Minecraft
 - Performance remains smooth (60 FPS) with physics enabled
-- Clean architecture maintained throughout (no god objects)
+- Clean architecture maintained throughout (no god objects, no vendor lock-in)
 - Professional game engine architecture following industry standards
