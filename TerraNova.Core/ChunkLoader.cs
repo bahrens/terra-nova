@@ -20,6 +20,9 @@ public class ChunkLoader
     // Callback for requesting chunks from server
     public Action<Vector2i[]>? OnChunkRequestNeeded { get; set; }
 
+    // Callback for when chunks are unloaded (for cleanup like physics bodies)
+    public Action<Vector2i>? OnChunkUnloaded { get; set; }
+
     public ChunkLoader(World world)
     {
         _world = world;
@@ -111,6 +114,9 @@ public class ChunkLoader
         {
             _loadedChunks.Remove(chunkPos);
             _world.RemoveChunk(chunkPos);
+
+            // Notify listeners (e.g., GameEngine) to clean up physics bodies
+            OnChunkUnloaded?.Invoke(chunkPos);
         }
     }
 

@@ -19,6 +19,8 @@ public struct Vector3 : IEquatable<Vector3>
 
     public readonly float Length => (float)Math.Sqrt(X * X + Y * Y + Z * Z);
 
+    public readonly float LengthSquared() => X * X + Y * Y + Z * Z;
+
     public readonly Vector3 Normalized()
     {
         float length = Length;
@@ -26,6 +28,13 @@ public struct Vector3 : IEquatable<Vector3>
             return new Vector3(X / length, Y / length, Z / length);
         return this;
     }
+
+    public static Vector3 Normalize(Vector3 vector)
+    {
+        return vector.Normalized();
+    }
+
+    public static readonly Vector3 Zero = new Vector3(0, 0, 0);
 
     public readonly bool Equals(Vector3 other)
     {

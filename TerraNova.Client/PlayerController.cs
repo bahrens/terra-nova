@@ -13,7 +13,12 @@ public class PlayerController
 {
     private readonly Camera _camera;
     private readonly INetworkClient _networkClient;
+    private readonly IPhysicsShapeFactory? _shapeFactory;
     private readonly ILogger<PlayerController> _logger;
+
+    // Physics state (initialized later via InitializePhysics)
+    private IPhysicsWorld? _physicsWorld;
+    private IPhysicsBody? _physicsBody;
 
     // Hotbar state
     private int _selectedHotbarSlot = 0; // 0-8 for slots 1-9
@@ -32,6 +37,10 @@ public class PlayerController
 
     // Cached raycast state (to avoid duplicate raycasts per frame)
     private RaycastHit? _cachedRaycastHit = null;
+
+    // Diagnostic logging state
+    private double _lastDiagnosticLogTime = 0;
+    private const double DiagnosticLogInterval = 1.0; // Log every 1 second
 
     /// <summary>
     /// Gets the currently selected hotbar slot (0-8)
@@ -54,15 +63,27 @@ public class PlayerController
     public RaycastHit? CachedRaycastHit => _cachedRaycastHit;
 
     /// <summary>
+    /// Gets the current physics body position (null if physics not initialized)
+    /// </summary>
+    public Shared.Vector3? PhysicsBodyPosition => _physicsBody?.Position;
+
+    /// <summary>
+    /// Gets the current physics body velocity (null if physics not initialized)
+    /// </summary>
+    public Shared.Vector3? PhysicsBodyVelocity => _physicsBody?.Velocity;
+
+    /// <summary>
     /// Creates a new PlayerController with the specified dependencies
     /// </summary>
     /// <param name="camera">The camera for raycasting and positioning</param>
     /// <param name="networkClient">Network client for sending block updates</param>
+    /// <param name="shapeFactory">Factory for creating physics collision shapes</param>
     /// <param name="logger">Logger for diagnostic output</param>
-    public PlayerController(Camera camera, INetworkClient networkClient, ILogger<PlayerController> logger)
+    public PlayerController(Camera camera, INetworkClient networkClient, IPhysicsShapeFactory shapeFactory, ILogger<PlayerController> logger)
     {
         _camera = camera;
         _networkClient = networkClient;
+        _shapeFactory = shapeFactory;
         _logger = logger;
     }
 
@@ -88,34 +109,120 @@ public class PlayerController
             HandleBlockInteraction(mouseState, world);
         }
 
+        // Diagnostic logging (periodic)
+        LogPhysicsDiagnostics(deltaTime);
+
         // In Stage 2B, additional phases will be added here:
         // Phase 3: Step physics world
         // Phase 4: Sync camera position to physics body
     }
 
     /// <summary>
+    /// Initialize player physics body. Must be called after physics world is created.
+    /// </summary>
+    /// <param name="physicsWorld">The physics world to add the player body to</param>
+    public void InitializePhysics(IPhysicsWorld physicsWorld)
+    {
+        _physicsWorld = physicsWorld;
+
+        // Create capsule shape for player (radius: 0.4, height: 1.6)
+        // This gives roughly human proportions for first-person view
+        IPhysicsShape capsuleShape = _shapeFactory!.CreateCapsule(0.4f, 1.6f);
+
+        // Create physics body at current camera position
+        // CRITICAL FIX: Set all properties BEFORE calling SetShape() per Jitter2 docs
+        _physicsBody = _physicsWorld.CreateBody();
+        _physicsBody.Position = new Shared.Vector3(
+            _camera.Position.X,
+            _camera.Position.Y,
+            _camera.Position.Z
+        );
+        _physicsBody.AffectedByGravity = true;  // Set gravity before shape
+        _physicsBody.IsStatic = false;          // Set motion type before shape (dynamic body)
+        _physicsBody.SetShape(capsuleShape);    // Add shape LAST
+        // Note: CreateBody() already adds to world, no need for AddBody()
+
+        _logger.LogInformation("Player physics body initialized at position ({X}, {Y}, {Z}) - IsStatic={IsStatic}, Gravity={Gravity}",
+            _physicsBody.Position.X, _physicsBody.Position.Y, _physicsBody.Position.Z,
+            _physicsBody.IsStatic, _physicsBody.AffectedByGravity);
+    }
+
+    /// <summary>
     /// Handles player movement input from keyboard.
-    /// Currently uses direct camera manipulation; will be replaced with physics forces in Stage 2B.2.
+    /// Uses physics-based movement when physics is initialized, falls back to direct camera manipulation otherwise.
     /// </summary>
     /// <param name="keyboardState">Current keyboard state</param>
     /// <param name="deltaTime">Time since last frame in seconds</param>
     public void HandleMovementInput(KeyboardState keyboardState, float deltaTime)
     {
-        // WASD movement
-        if (keyboardState.IsKeyDown(Keys.W))
-            _camera.ProcessKeyboard(CameraMovement.Forward, deltaTime);
-        if (keyboardState.IsKeyDown(Keys.S))
-            _camera.ProcessKeyboard(CameraMovement.Backward, deltaTime);
-        if (keyboardState.IsKeyDown(Keys.A))
-            _camera.ProcessKeyboard(CameraMovement.Left, deltaTime);
-        if (keyboardState.IsKeyDown(Keys.D))
-            _camera.ProcessKeyboard(CameraMovement.Right, deltaTime);
+        if (_physicsBody == null)
+        {
+            // Fallback to old movement if physics not initialized
+            if (keyboardState.IsKeyDown(Keys.W))
+                _camera.ProcessKeyboard(CameraMovement.Forward, deltaTime);
+            if (keyboardState.IsKeyDown(Keys.S))
+                _camera.ProcessKeyboard(CameraMovement.Backward, deltaTime);
+            if (keyboardState.IsKeyDown(Keys.A))
+                _camera.ProcessKeyboard(CameraMovement.Left, deltaTime);
+            if (keyboardState.IsKeyDown(Keys.D))
+                _camera.ProcessKeyboard(CameraMovement.Right, deltaTime);
+            if (keyboardState.IsKeyDown(Keys.Space))
+                _camera.ProcessKeyboard(CameraMovement.Up, deltaTime);
+            if (keyboardState.IsKeyDown(Keys.LeftShift))
+                _camera.ProcessKeyboard(CameraMovement.Down, deltaTime);
+            return;
+        }
 
-        // Vertical movement (up/down)
-        if (keyboardState.IsKeyDown(Keys.Space))
-            _camera.ProcessKeyboard(CameraMovement.Up, deltaTime);
-        if (keyboardState.IsKeyDown(Keys.LeftShift))
-            _camera.ProcessKeyboard(CameraMovement.Down, deltaTime);
+        // Physics-based movement
+        float moveSpeed = 5.0f; // m/s
+        Shared.Vector3 moveDirection = Shared.Vector3.Zero;
+
+        // Get camera front/right in Shared.Vector3 format
+        var cameraFront = new Shared.Vector3(_camera.Front.X, _camera.Front.Y, _camera.Front.Z);
+        var cameraRight = new Shared.Vector3(_camera.Right.X, _camera.Right.Y, _camera.Right.Z);
+
+        // Calculate horizontal movement (ignore Y component for ground movement)
+        cameraFront.Y = 0;
+        if (cameraFront.LengthSquared() > 0.01f)
+            cameraFront = Shared.Vector3.Normalize(cameraFront);
+
+        cameraRight.Y = 0;
+        if (cameraRight.LengthSquared() > 0.01f)
+            cameraRight = Shared.Vector3.Normalize(cameraRight);
+
+        if (keyboardState.IsKeyDown(Keys.W))
+            moveDirection += cameraFront;
+        if (keyboardState.IsKeyDown(Keys.S))
+            moveDirection -= cameraFront;
+        if (keyboardState.IsKeyDown(Keys.A))
+            moveDirection -= cameraRight;
+        if (keyboardState.IsKeyDown(Keys.D))
+            moveDirection += cameraRight;
+
+        // Normalize to prevent faster diagonal movement
+        if (moveDirection.LengthSquared() > 0.01f)
+            moveDirection = Shared.Vector3.Normalize(moveDirection);
+
+        // Set horizontal velocity (preserve vertical velocity for gravity/jumping)
+        Shared.Vector3 currentVelocity = _physicsBody.Velocity;
+        _physicsBody.Velocity = new Shared.Vector3(
+            moveDirection.X * moveSpeed,
+            currentVelocity.Y, // Preserve vertical velocity
+            moveDirection.Z * moveSpeed
+        );
+
+        // Jumping with IsGrounded check
+        if (keyboardState.IsKeyPressed(Keys.Space) && _physicsBody.IsGrounded)
+        {
+            // Apply jump impulse (instant upward velocity)
+            float jumpVelocity = 6.5f; // Jump strength
+            Shared.Vector3 vel = _physicsBody.Velocity;
+            _physicsBody.Velocity = new Shared.Vector3(vel.X, jumpVelocity, vel.Z);
+        }
+
+        // Sync camera position with physics body (add eye height offset)
+        Shared.Vector3 bodyPos = _physicsBody.Position;
+        _camera.Position = new OpenTK.Mathematics.Vector3(bodyPos.X, bodyPos.Y + 0.8f, bodyPos.Z);
     }
 
     /// <summary>
@@ -247,5 +354,33 @@ public class PlayerController
             BlockFace.Bottom => new Vector3i(blockPos.X, blockPos.Y - 1, blockPos.Z),
             _ => blockPos
         };
+    }
+
+    /// <summary>
+    /// Logs physics diagnostics periodically for debugging movement issues.
+    /// Logs velocity, ground state, and position every second.
+    /// </summary>
+    private void LogPhysicsDiagnostics(double deltaTime)
+    {
+        if (_physicsBody == null)
+            return;
+
+        _lastDiagnosticLogTime += deltaTime;
+        if (_lastDiagnosticLogTime >= DiagnosticLogInterval)
+        {
+            _lastDiagnosticLogTime = 0;
+
+            Shared.Vector3 vel = _physicsBody.Velocity;
+            Shared.Vector3 pos = _physicsBody.Position;
+            float horizontalSpeed = MathF.Sqrt(vel.X * vel.X + vel.Z * vel.Z);
+
+            _logger.LogDebug(
+                "Physics: Pos=({PosX:F2}, {PosY:F2}, {PosZ:F2}) " +
+                "Vel=({VelX:F2}, {VelY:F2}, {VelZ:F2}) " +
+                "HSpeed={HSpeed:F2} m/s Grounded={Grounded}",
+                pos.X, pos.Y, pos.Z,
+                vel.X, vel.Y, vel.Z,
+                horizontalSpeed, _physicsBody.IsGrounded);
+        }
     }
 }

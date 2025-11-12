@@ -11,6 +11,7 @@ public class Camera : ICameraView
     // Camera position and orientation (OpenTK vectors for internal use)
     public Vector3 Position { get; set; }
     public Vector3 Front => _front;  // Public accessor for camera direction
+    public Vector3 Right => _right;  // Public accessor for right direction
     private Vector3 _front = -Vector3.UnitZ;  // Direction camera is facing
     private Vector3 _up = Vector3.UnitY;      // Up direction
     private Vector3 _right = Vector3.UnitX;   // Right direction

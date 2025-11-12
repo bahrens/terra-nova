@@ -4,6 +4,7 @@ using OpenTK.Mathematics;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using TerraNova.Configuration;
 using TerraNova.Core;
+using TerraNova.Physics;
 using TerraNova.Shared;
 using Vector3 = OpenTK.Mathematics.Vector3;
 using Vector3i = TerraNova.Shared.Vector3i;
@@ -25,11 +26,18 @@ public class ClientApplication : IDisposable
     private readonly WindowStateManager _windowStateManager;
     private readonly ILogger<ClientApplication> _logger;
     private readonly ILoggerFactory _loggerFactory;
+    private readonly IPhysicsShapeFactory _shapeFactory;
 
     // Renderer and game engine (created after world received)
     private IRenderer? _renderer;
     private GameEngine? _gameEngine;
     private World? _world;
+
+    // Physics (created after world received)
+    private IPhysicsWorld? _physicsWorld;
+
+    // Frame counter for periodic diagnostics
+    private int _frameCount = 0;
 
     public ClientApplication(
         INetworkClient networkClient,
@@ -50,8 +58,9 @@ public class ClientApplication : IDisposable
             Fov = MathHelper.DegreesToRadians(cameraSettings.Value.FieldOfView)
         };
 
-        // Initialize player controller
-        _playerController = new PlayerController(_camera, networkClient, loggerFactory.CreateLogger<PlayerController>());
+        // Initialize physics shape factory (used by player)
+        _shapeFactory = new VoxelShapeFactory();
+        _playerController = new PlayerController(_camera, networkClient, _shapeFactory, loggerFactory.CreateLogger<PlayerController>());
 
         // Initialize coordinators
         _networkCoordinator = new NetworkCoordinator(networkClient, networkSettings.Value, loggerFactory.CreateLogger<NetworkCoordinator>());
@@ -95,6 +104,26 @@ public class ClientApplication : IDisposable
         if (_renderer == null && _networkCoordinator.WorldReceived && _networkCoordinator.World != null)
         {
             InitializeWorldSystems();
+        }
+
+        // Step physics simulation
+        if (_physicsWorld != null)
+        {
+            _physicsWorld.Step((float)deltaTime);
+
+            // Periodic diagnostic logging (every 60 frames to avoid spam)
+            _frameCount++;
+            if (_frameCount % 60 == 0)
+            {
+                var playerPos = _playerController.PhysicsBodyPosition;
+                var playerVel = _playerController.PhysicsBodyVelocity;
+                if (playerPos.HasValue && playerVel.HasValue)
+                {
+                    _logger.LogDebug("Player: Pos=({X:F2}, {Y:F2}, {Z:F2}), Vel=({VX:F2}, {VY:F2}, {VZ:F2})",
+                        playerPos.Value.X, playerPos.Value.Y, playerPos.Value.Z,
+                        playerVel.Value.X, playerVel.Value.Y, playerVel.Value.Z);
+                }
+            }
         }
 
         // Update player controller (input, raycasting, block interaction)
@@ -182,7 +211,7 @@ public class ClientApplication : IDisposable
     /// </summary>
     private void InitializeWorldSystems()
     {
-        _logger.LogInformation("World received! Initializing GameEngine and Renderer...");
+        _logger.LogInformation("World received! Initializing GameEngine, Renderer, and Physics...");
 
         _world = _networkCoordinator.World;
         _renderer = new OpenTKRenderer(_world!, _loggerFactory.CreateLogger<OpenTKRenderer>());
@@ -191,10 +220,32 @@ public class ClientApplication : IDisposable
 
         _gameEngine = new GameEngine(_renderer);
 
-        // Let NetworkCoordinator handle network event registration
+        // Hook up logging to GameEngine for debugging collision issues
+        _gameEngine.Logger = (msg) => _logger.LogInformation(msg);
+
+        // CRITICAL FIX: Set up network event handlers FIRST, then set world BEFORE physics initialization
+        // This ensures: 1) Events are registered before ChunkLoader is created
+        //               2) World is available when InitializePhysics creates terrain collision
         _networkCoordinator.InitializeWorld(_gameEngine, _world!);
 
-        _logger.LogInformation("Chunk streaming enabled!");
+        // Create voxel physics world with custom AABB collision
+        var collisionLogger = _loggerFactory.CreateLogger<VoxelCollisionSystem>();
+        _physicsWorld = new VoxelPhysicsWorld(collisionLogger);
+        _physicsWorld.SetGravity(new Shared.Vector3(0, -9.81f, 0));
+
+        // CRITICAL: Set world reference for voxel collision queries
+        if (_physicsWorld is VoxelPhysicsWorld voxelPhysicsWorld)
+        {
+            voxelPhysicsWorld.SetWorld(_world!);
+        }
+
+        _logger.LogInformation("Initializing player physics at camera position ({X}, {Y}, {Z})",
+            _camera.Position.X, _camera.Position.Y, _camera.Position.Z);
+
+        // Initialize player physics
+        _playerController.InitializePhysics(_physicsWorld);
+
+        _logger.LogInformation("Chunk streaming and voxel physics enabled!");
     }
 
     public void Dispose()
