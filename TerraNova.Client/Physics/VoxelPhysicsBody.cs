@@ -17,6 +17,7 @@ public class VoxelPhysicsBody : IPhysicsBody
     private VoxelPhysicsShape? _shape;
     private bool _isGrounded;
     private ILogger? _logger;
+    private bool _autoJumpEnabled;
 
     // Smooth jump state (using ease-in cubic for natural upward acceleration)
     private bool _isJumping;
@@ -40,6 +41,7 @@ public class VoxelPhysicsBody : IPhysicsBody
         _jumpDuration = 0f;
         _jumpElapsedTime = 0f;
         _lastAutoJumpTime = -AutoJumpCooldown; // Allow immediate first auto-jump
+        _autoJumpEnabled = true; // Default to enabled
         _logger = logger;
     }
 
@@ -77,6 +79,17 @@ public class VoxelPhysicsBody : IPhysicsBody
     /// Gets whether the body is currently executing a smooth jump
     /// </summary>
     public bool IsJumping => _isJumping;
+
+    /// <summary>
+    /// Gets or sets whether auto-jump is enabled for this body.
+    /// When enabled, the body will automatically jump when walking into climbable ledges.
+    /// Default: true
+    /// </summary>
+    public bool AutoJumpEnabled
+    {
+        get => _autoJumpEnabled;
+        set => _autoJumpEnabled = value;
+    }
 
     public void ApplyForce(Vector3 force)
     {

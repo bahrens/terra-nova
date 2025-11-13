@@ -1,6 +1,7 @@
 using Jitter2;
 using Jitter2.Collision;
 using Jitter2.LinearMath;
+using Microsoft.Extensions.Logging;
 using TerraNova.Core;
 using TerraNova.Shared;
 
@@ -13,12 +14,14 @@ namespace TerraNova.Physics;
 public class JitterPhysicsWorld : IPhysicsWorld
 {
     private readonly Jitter2.World _world;
+    private readonly ILogger<JitterPhysicsWorld>? _logger;
 
-    public JitterPhysicsWorld()
+    public JitterPhysicsWorld(ILogger<JitterPhysicsWorld>? logger = null)
     {
         _world = new Jitter2.World();
         // Default gravity (can be changed via SetGravity)
         _world.Gravity = new JVector(0, -9.81f, 0);
+        _logger = logger;
     }
 
     private int _stepCount = 0;
@@ -28,7 +31,8 @@ public class JitterPhysicsWorld : IPhysicsWorld
         _stepCount++;
         if (_stepCount % 60 == 0) // Log every 60 steps (~1 second at 60fps)
         {
-            Console.WriteLine($"[JitterPhysicsWorld] Step #{_stepCount}, dt={deltaTime:F4}, RigidBodies={_world.RigidBodies.Count}");
+            _logger?.LogDebug("Step #{StepCount}, dt={DeltaTime:F4}, RigidBodies={RigidBodyCount}",
+                _stepCount, deltaTime, _world.RigidBodies.Count);
         }
         _world.Step(deltaTime);
     }
@@ -92,8 +96,8 @@ public class JitterPhysicsWorld : IPhysicsWorld
     public IPhysicsBody CreateBody()
     {
         var rigidBody = _world.CreateRigidBody();
-        Console.WriteLine($"[JitterPhysicsWorld] Created RigidBody at position ({rigidBody.Position.X},{rigidBody.Position.Y},{rigidBody.Position.Z}), " +
-                         $"MotionType={rigidBody.MotionType}, IsActive={rigidBody.IsActive}");
+        _logger?.LogDebug("Created RigidBody at position ({X},{Y},{Z}), MotionType={MotionType}, IsActive={IsActive}",
+            rigidBody.Position.X, rigidBody.Position.Y, rigidBody.Position.Z, rigidBody.MotionType, rigidBody.IsActive);
         return new JitterPhysicsBody(rigidBody);
     }
 }

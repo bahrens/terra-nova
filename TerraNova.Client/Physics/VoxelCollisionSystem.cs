@@ -143,7 +143,7 @@ public class VoxelCollisionSystem
         remainingMovement.X = 0; // X movement consumed
 
         // Step 3: If X movement blocked, check for auto-jump trigger
-        if (hitX && Math.Abs(movement.X) > 0.0001f && body != null)
+        if (hitX && Math.Abs(movement.X) > 0.0001f && body != null && body.AutoJumpEnabled)
         {
             _logger?.LogInformation("[AUTO-JUMP] X-axis collision detected, movement.X={MovementX:F3}, checking auto-jump conditions...", movement.X);
             _logger?.LogInformation("[AUTO-JUMP] hitGround={HitGround}, body!=null={BodyNotNull}", hitGround, body != null);
@@ -184,7 +184,7 @@ public class VoxelCollisionSystem
         remainingMovement.Z = 0; // Z movement consumed
 
         // Step 5: If Z movement blocked, check for auto-jump trigger
-        if (hitZ && Math.Abs(movement.Z) > 0.0001f && body != null)
+        if (hitZ && Math.Abs(movement.Z) > 0.0001f && body != null && body.AutoJumpEnabled)
         {
             _logger?.LogInformation("[AUTO-JUMP] Z-axis collision detected, movement.Z={MovementZ:F3}, checking auto-jump conditions...", movement.Z);
             _logger?.LogInformation("[AUTO-JUMP] hitGround={HitGround}, body!=null={BodyNotNull}", hitGround, body != null);

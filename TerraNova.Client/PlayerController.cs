@@ -230,6 +230,17 @@ public class PlayerController
                 voxelBody.StartJump(5.0f, 0.3f);
             }
         }
+
+        // Toggle auto-jump feature with J key
+        if (keyboardState.IsKeyPressed(Keys.J))
+        {
+            if (_physicsBody is TerraNova.Physics.VoxelPhysicsBody voxelBody)
+            {
+                voxelBody.AutoJumpEnabled = !voxelBody.AutoJumpEnabled;
+                _logger.LogInformation("Auto-jump {State}",
+                    voxelBody.AutoJumpEnabled ? "enabled" : "disabled");
+            }
+        }
     }
 
     /// <summary>

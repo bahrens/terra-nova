@@ -1,5 +1,6 @@
 using Jitter2.Collision.Shapes;
 using Jitter2.LinearMath;
+using Microsoft.Extensions.Logging;
 using TerraNova.Core;
 using TerraNova.Shared;
 
@@ -11,6 +12,12 @@ namespace TerraNova.Physics;
 /// </summary>
 public class JitterShapeFactory : IPhysicsShapeFactory
 {
+    private readonly ILogger<JitterShapeFactory>? _logger;
+
+    public JitterShapeFactory(ILogger<JitterShapeFactory>? logger = null)
+    {
+        _logger = logger;
+    }
     public IPhysicsShape CreateBox(Vector3 halfExtents)
     {
         // BoxShape constructor takes SIZE (full dimensions)
@@ -19,7 +26,8 @@ public class JitterShapeFactory : IPhysicsShapeFactory
         float sizeY = halfExtents.Y * 2;
         float sizeZ = halfExtents.Z * 2;
 
-        Console.WriteLine($"[JitterShapeFactory] Creating BoxShape: halfExtents=({halfExtents.X},{halfExtents.Y},{halfExtents.Z}) → size=({sizeX},{sizeY},{sizeZ})");
+        _logger?.LogDebug("Creating BoxShape: halfExtents=({HalfX},{HalfY},{HalfZ}) → size=({SizeX},{SizeY},{SizeZ})",
+            halfExtents.X, halfExtents.Y, halfExtents.Z, sizeX, sizeY, sizeZ);
 
         var boxShape = new BoxShape(sizeX, sizeY, sizeZ);
         return new JitterPhysicsShape(boxShape);
@@ -33,10 +41,10 @@ public class JitterShapeFactory : IPhysicsShapeFactory
 
     public IPhysicsShape CreateCapsule(float radius, float height)
     {
-        Console.WriteLine($"[JitterShapeFactory] Creating CapsuleShape with radius={radius}, height={height}");
+        _logger?.LogDebug("Creating CapsuleShape with radius={Radius}, height={Height}", radius, height);
         // NOTE: CapsuleShape constructor parameter order - need to verify which comes first
         var capsuleShape = new CapsuleShape(height, radius);
-        Console.WriteLine($"[JitterShapeFactory] CapsuleShape created successfully");
+        _logger?.LogDebug("CapsuleShape created successfully");
         return new JitterPhysicsShape(capsuleShape);
     }
 }

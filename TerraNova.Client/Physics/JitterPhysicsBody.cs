@@ -1,5 +1,6 @@
 using Jitter2.Dynamics;
 using Jitter2.LinearMath;
+using Microsoft.Extensions.Logging;
 using TerraNova.Core;
 using TerraNova.Shared;
 
@@ -12,10 +13,12 @@ namespace TerraNova.Physics;
 public class JitterPhysicsBody : IPhysicsBody
 {
     private readonly RigidBody _body;
+    private readonly ILogger<JitterPhysicsBody>? _logger;
 
-    public JitterPhysicsBody(RigidBody body)
+    public JitterPhysicsBody(RigidBody body, ILogger<JitterPhysicsBody>? logger = null)
     {
         _body = body;
+        _logger = logger;
     }
 
     public Vector3 Position
@@ -67,7 +70,8 @@ public class JitterPhysicsBody : IPhysicsBody
                 _body.MotionType = MotionType.Dynamic;
             }
 
-            Console.WriteLine($"[JitterPhysicsBody] IsStatic set to {value}: MotionType changed from {oldMotionType} to {_body.MotionType}, IsActive={_body.IsActive}");
+            _logger?.LogDebug("IsStatic set to {Value}: MotionType changed from {OldMotionType} to {NewMotionType}, IsActive={IsActive}",
+                value, oldMotionType, _body.MotionType, _body.IsActive);
         }
     }
 
@@ -102,13 +106,13 @@ public class JitterPhysicsBody : IPhysicsBody
         // the rigid body position, before adding shapes."
 
         // Debug logging
-        Console.WriteLine($"[JitterPhysicsBody] SetShape() called at position ({_body.Position.X}, {_body.Position.Y}, {_body.Position.Z}), " +
-                         $"MotionType={_body.MotionType}, IsActive={_body.IsActive}");
+        _logger?.LogDebug("SetShape() called at position ({X}, {Y}, {Z}), MotionType={MotionType}, IsActive={IsActive}",
+            _body.Position.X, _body.Position.Y, _body.Position.Z, _body.MotionType, _body.IsActive);
 
         _body.AddShape(jitterShape.InternalShape);
 
         // Log after adding shape
-        Console.WriteLine($"[JitterPhysicsBody] Shape added. Body now has {_body.Shapes.Count} shape(s)");
+        _logger?.LogDebug("Shape added. Body now has {ShapeCount} shape(s)", _body.Shapes.Count);
     }
 
     /// <summary>
