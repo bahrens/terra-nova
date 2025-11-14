@@ -308,11 +308,11 @@ public class VoxelCollisionSystem
                 Vector2i chunkPos = new Vector2i(x >> 4, z >> 4); // Divide by 16
                 if (!_world.HasChunk(chunkPos))
                 {
-                    // Unloaded chunk = treat as solid wall (safe fallback)
+                    // Unloaded chunk = treat as solid wall (safe fallback, center-anchored to match rendering)
                     // This prevents players from falling through unloaded chunks
                     AABB voxelAABB = new AABB(
-                        new Vector3(x, minY, z),
-                        new Vector3(x + 1, maxY + 1, z + 1)
+                        new Vector3(x - 0.5f, minY - 0.5f, z - 0.5f),
+                        new Vector3(x + 0.5f, maxY + 0.5f, z + 0.5f)
                     );
 
                     float collisionTime = CalculateCollisionTime(aabb, voxelAABB, desiredMovement, axis);
@@ -333,10 +333,11 @@ public class VoxelCollisionSystem
                     if (block == BlockType.Air)
                         continue;
 
-                    // Create AABB for this voxel (1x1x1 block)
+                    // Create AABB for this voxel (1x1x1 block, center-anchored to match rendering)
+                    // Block at integer position (x,y,z) is centered at that position
                     AABB voxelAABB = new AABB(
-                        new Vector3(x, y, z),
-                        new Vector3(x + 1, y + 1, z + 1)
+                        new Vector3(x - 0.5f, y - 0.5f, z - 0.5f),
+                        new Vector3(x + 0.5f, y + 0.5f, z + 0.5f)
                     );
 
                     // Calculate collision time with this voxel
