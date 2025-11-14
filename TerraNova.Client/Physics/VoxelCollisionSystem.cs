@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
 using TerraNova.Shared;
 
@@ -127,19 +128,26 @@ public class VoxelCollisionSystem
 
         Vector3 totalMovement = Vector3.Zero;
         Vector3 remainingMovement = movement;
-        const int maxIterations = 4;  // Prevent infinite loops
+        const int maxIterations = 8;  // Increased from 4 - complex corners need more iterations
         bool hasTriedAutoJump = false;  // Track if we've already attempted auto-jump this frame
 
-        for (int iteration = 0; iteration < maxIterations; iteration++)
+        // Track which voxels we've already collided with to prevent re-collision loops
+        HashSet<Vector3i> ignoredVoxels = new HashSet<Vector3i>();
+
+        int iteration;
+        for (iteration = 0; iteration < maxIterations; iteration++)
         {
             if (remainingMovement.LengthSquared() < 0.0001f)
                 break;  // No more movement to resolve
 
-            // Find earliest collision across all axes
-            CollisionResult collision = FindFirstCollision(aabb, remainingMovement);
+            // Find earliest collision across all axes (passing ignore set)
+            CollisionResult collision = FindFirstCollision(aabb, remainingMovement, ignoredVoxels, shouldLog);
 
             if (collision.Hit)
             {
+                // Add this voxel to ignore list to prevent re-collision
+                ignoredVoxels.Add(collision.VoxelPosition);
+
                 // Move to collision point
                 Vector3 moveToCollision = remainingMovement * collision.Time;
                 aabb = aabb.Offset(moveToCollision);
@@ -188,10 +196,7 @@ public class VoxelCollisionSystem
                 float dot = Vector3.Dot(remainingMovement, collision.Normal);
                 remainingMovement = remainingMovement - collision.Normal * dot;
 
-                // Small epsilon offset to prevent sticking to surface
-                const float epsilon = 0.0001f;
-                aabb = aabb.Offset(collision.Normal * epsilon);
-                totalMovement += collision.Normal * epsilon;
+                // NOTE: Epsilon offset removed - ignore list prevents re-collision now
             }
             else
             {
@@ -199,6 +204,20 @@ public class VoxelCollisionSystem
                 aabb = aabb.Offset(remainingMovement);
                 totalMovement += remainingMovement;
                 break;
+            }
+        }
+
+        // Warn if we exhausted iterations with significant remaining movement
+        if (iteration == maxIterations && remainingMovement.LengthSquared() > 0.01f)
+        {
+            if (_logger != null)
+            {
+                _logger.LogWarning(
+                    "[COLLISION] Hit iteration limit! Used {Iterations} iterations, " +
+                    "remaining movement = ({X:F3}, {Y:F3}, {Z:F3}), length = {Length:F3}m",
+                    maxIterations,
+                    remainingMovement.X, remainingMovement.Y, remainingMovement.Z,
+                    MathF.Sqrt(remainingMovement.LengthSquared()));
             }
         }
 
@@ -321,11 +340,13 @@ public class VoxelCollisionSystem
     }
 
     /// <summary>
-    /// Test collision along a single axis and return the collision time (0-1).
+    /// Test collision along a single axis and return the collision time (0-1) and voxel position.
     /// Returns -1 if no collision occurs.
     /// </summary>
-    private float TestAxisCollision(AABB aabb, Vector3 movement, Axis axis)
+    private float TestAxisCollision(AABB aabb, Vector3 movement, Axis axis, HashSet<Vector3i>? ignoredVoxels, out Vector3i closestVoxel)
     {
+        closestVoxel = new Vector3i(0, 0, 0);
+
         // Extract movement for this axis
         float desiredMovement = axis switch
         {
@@ -394,12 +415,18 @@ public class VoxelCollisionSystem
                     if (collisionTime >= 0 && collisionTime < closestCollisionTime)
                     {
                         closestCollisionTime = collisionTime;
+                        closestVoxel = new Vector3i(x, minY, z);
                     }
                     continue;
                 }
 
                 for (int y = minY; y <= maxY; y++)
                 {
+                    // Skip if this voxel is in the ignore set
+                    Vector3i voxelPos = new Vector3i(x, y, z);
+                    if (ignoredVoxels?.Contains(voxelPos) == true)
+                        continue;
+
                     BlockType block = _world.GetBlock(x, y, z);
 
                     if (block == BlockType.Air)
@@ -415,6 +442,7 @@ public class VoxelCollisionSystem
                     if (collisionTime >= 0 && collisionTime < closestCollisionTime)
                     {
                         closestCollisionTime = collisionTime;
+                        closestVoxel = voxelPos;
                     }
                 }
             }
@@ -442,26 +470,28 @@ public class VoxelCollisionSystem
     /// Find the first collision across all three axes.
     /// Returns the earliest collision with timing and normal information.
     /// </summary>
-    private CollisionResult FindFirstCollision(AABB aabb, Vector3 movement)
+    private CollisionResult FindFirstCollision(AABB aabb, Vector3 movement, HashSet<Vector3i>? ignoredVoxels, bool shouldLog = false)
     {
         CollisionResult earliest = new CollisionResult
         {
             Hit = false,
             Time = 1.0f,
             Normal = Vector3.Zero,
-            CollisionAxis = Axis.X
+            CollisionAxis = Axis.X,
+            VoxelPosition = new Vector3i(0, 0, 0)
         };
 
         // Test all three axes and keep track of earliest collision
         foreach (Axis axis in new[] { Axis.X, Axis.Y, Axis.Z })
         {
-            float time = TestAxisCollision(aabb, movement, axis);
+            float time = TestAxisCollision(aabb, movement, axis, ignoredVoxels, out Vector3i voxelPos);
             if (time >= 0 && time < earliest.Time)
             {
                 earliest.Hit = true;
                 earliest.Time = time;
                 earliest.CollisionAxis = axis;
                 earliest.Normal = GetNormalForAxis(axis, movement);
+                earliest.VoxelPosition = voxelPos;
             }
         }
 
@@ -485,5 +515,6 @@ public class VoxelCollisionSystem
         public float Time;            // Time of collision (0-1, where 0=start, 1=end of movement)
         public Vector3 Normal;        // Surface normal at collision point
         public Axis CollisionAxis;    // Which axis the collision occurred on
+        public Vector3i VoxelPosition; // Which voxel was hit (for collision tracking)
     }
 }
