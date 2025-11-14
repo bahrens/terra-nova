@@ -67,6 +67,7 @@ public class Game : GameWindow
 
         _logger.LogInformation("Terra Nova initialized!");
         _logger.LogInformation("Controls: WASD to move, Space/Shift for up/down, Mouse to look, F11 for fullscreen, ESC to exit");
+        _logger.LogInformation("Debug: F3 for position diagnostics, J to toggle auto-jump");
     }
 
     /// <summary>

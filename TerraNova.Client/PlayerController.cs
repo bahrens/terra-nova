@@ -125,9 +125,10 @@ public class PlayerController
     {
         _physicsWorld = physicsWorld;
 
-        // Create capsule shape for player (radius: 0.4, height: 1.6)
-        // This gives roughly human proportions for first-person view
-        IPhysicsShape capsuleShape = _shapeFactory!.CreateCapsule(0.4f, 1.6f);
+        // Create capsule shape for player (radius: 0.3, height: 1.6)
+        // Reduced from 0.4m to 0.3m for better fit through 1-block holes
+        // This creates 0.6m wide x 2.2m tall AABB with 0.2m clearance per side
+        IPhysicsShape capsuleShape = _shapeFactory!.CreateCapsule(0.3f, 1.6f);
 
         // Create physics body at current camera position
         // CRITICAL FIX: Set all properties BEFORE calling SetShape() per Jitter2 docs
@@ -241,6 +242,12 @@ public class PlayerController
                     voxelBody.AutoJumpEnabled ? "enabled" : "disabled");
             }
         }
+
+        // F3 key: Dump position diagnostics
+        if (keyboardState.IsKeyPressed(Keys.F3))
+        {
+            LogPositionDiagnostics();
+        }
     }
 
     /// <summary>
@@ -253,7 +260,77 @@ public class PlayerController
             return;
 
         Shared.Vector3 bodyPos = _physicsBody.Position;
-        _camera.Position = new OpenTK.Mathematics.Vector3(bodyPos.X, bodyPos.Y + 0.8f, bodyPos.Z);
+        // Camera eye height: 1.62m above feet (90% of 1.8m, Minecraft-style)
+        // With new 0.3m radius, total height is 2.2m
+        _camera.Position = new OpenTK.Mathematics.Vector3(bodyPos.X, bodyPos.Y + 1.62f, bodyPos.Z);
+    }
+
+    /// <summary>
+    /// Log detailed position alignment diagnostics.
+    /// Call this when user presses F3 to trigger diagnostic dump.
+    /// </summary>
+    public void LogPositionDiagnostics()
+    {
+        if (_physicsBody == null)
+        {
+            _logger.LogWarning("[DIAGNOSTICS] Physics not initialized - no position data available");
+            return;
+        }
+
+        Shared.Vector3 bodyPos = _physicsBody.Position;
+        OpenTK.Mathematics.Vector3 cameraPos = _camera.Position;
+
+        // Cast to VoxelPhysicsBody to access shape information
+        if (_physicsBody is TerraNova.Physics.VoxelPhysicsBody voxelBody && voxelBody.Shape != null)
+        {
+            var halfExtents = voxelBody.Shape.HalfExtents;
+            float capsuleHalfHeight = halfExtents.Y;
+
+            // Calculate AABB bounds (same calculation as MoveBody)
+            Shared.Vector3 aabbCenter = new Shared.Vector3(
+                bodyPos.X,
+                bodyPos.Y + capsuleHalfHeight,
+                bodyPos.Z
+            );
+
+            Shared.Vector3 aabbMin = new Shared.Vector3(
+                aabbCenter.X - halfExtents.X,
+                aabbCenter.Y - halfExtents.Y,
+                aabbCenter.Z - halfExtents.Z
+            );
+
+            Shared.Vector3 aabbMax = new Shared.Vector3(
+                aabbCenter.X + halfExtents.X,
+                aabbCenter.Y + halfExtents.Y,
+                aabbCenter.Z + halfExtents.Z
+            );
+
+            // Calculate which block coordinates the player is in/over
+            int blockX = (int)Math.Floor(bodyPos.X);
+            int blockY = (int)Math.Floor(bodyPos.Y);
+            int blockZ = (int)Math.Floor(bodyPos.Z);
+
+            _logger.LogInformation("========== POSITION DIAGNOSTICS ==========");
+            _logger.LogInformation("[DIAGNOSTICS] Body Position (feet):  ({X:F3}, {Y:F3}, {Z:F3})",
+                bodyPos.X, bodyPos.Y, bodyPos.Z);
+            _logger.LogInformation("[DIAGNOSTICS] Camera Position (eyes): ({X:F3}, {Y:F3}, {Z:F3})",
+                cameraPos.X, cameraPos.Y, cameraPos.Z);
+            _logger.LogInformation("[DIAGNOSTICS] Capsule Radius: {Radius}m, Half-Height: {HalfHeight}m",
+                halfExtents.X, capsuleHalfHeight);
+            _logger.LogInformation("[DIAGNOSTICS] AABB Center:   ({X:F3}, {Y:F3}, {Z:F3})",
+                aabbCenter.X, aabbCenter.Y, aabbCenter.Z);
+            _logger.LogInformation("[DIAGNOSTICS] AABB Min:      ({X:F3}, {Y:F3}, {Z:F3})",
+                aabbMin.X, aabbMin.Y, aabbMin.Z);
+            _logger.LogInformation("[DIAGNOSTICS] AABB Max:      ({X:F3}, {Y:F3}, {Z:F3})",
+                aabbMax.X, aabbMax.Y, aabbMax.Z);
+            _logger.LogInformation("[DIAGNOSTICS] AABB Size:     ({X:F3} x {Y:F3} x {Z:F3})",
+                aabbMax.X - aabbMin.X, aabbMax.Y - aabbMin.Y, aabbMax.Z - aabbMin.Z);
+            _logger.LogInformation("[DIAGNOSTICS] Standing on block: ({X}, {Y}, {Z})",
+                blockX, blockY, blockZ);
+            _logger.LogInformation("[DIAGNOSTICS] Grounded: {Grounded}, Velocity: ({VX:F3}, {VY:F3}, {VZ:F3})",
+                _physicsBody.IsGrounded, _physicsBody.Velocity.X, _physicsBody.Velocity.Y, _physicsBody.Velocity.Z);
+            _logger.LogInformation("==========================================");
+        }
     }
 
     /// <summary>

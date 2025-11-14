@@ -347,6 +347,15 @@ public class VoxelCollisionSystem
                     {
                         closestCollisionTime = collisionTime;
                         foundCollision = true;
+
+                        if (axisLabel != null && _logger != null)
+                        {
+                            _logger.LogDebug(
+                                "[COLLISION] {Axis} COLLIDED with block ({BlockX},{BlockY},{BlockZ}) type={BlockType} " +
+                                "at time={Time:F3}",
+                                axisLabel, x, y, z, block, collisionTime
+                            );
+                        }
                     }
                 }
             }
