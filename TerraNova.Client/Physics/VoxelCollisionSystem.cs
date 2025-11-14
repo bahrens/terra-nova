@@ -106,8 +106,9 @@ public class VoxelCollisionSystem
     }
 
     /// <summary>
-    /// Sweep an AABB through the world and resolve collisions.
-    /// Uses axis-by-axis collision detection for stable sliding along surfaces.
+    /// Sweep an AABB through the world and resolve collisions using iterative approach.
+    /// Finds the first collision across all axes, moves to that point, then slides along the surface.
+    /// Repeats until movement is fully resolved (Minecraft-style collision resolution).
     /// Triggers auto-jump when grounded player walks into climbable ledges.
     /// </summary>
     /// <param name="aabb">The AABB to sweep</param>
@@ -124,296 +125,86 @@ public class VoxelCollisionSystem
         if (movement.LengthSquared() < 0.0001f)
             return Vector3.Zero;
 
-        // Split movement into Y (vertical), then X and Z (horizontal)
-        // This order is critical: Y first for proper ground detection and gravity
+        Vector3 totalMovement = Vector3.Zero;
         Vector3 remainingMovement = movement;
+        const int maxIterations = 4;  // Prevent infinite loops
+        bool hasTriedAutoJump = false;  // Track if we've already attempted auto-jump this frame
 
-        // Step 1: Move vertically (Y axis)
-        float yMovement = MoveAlongAxis(ref aabb, remainingMovement, Axis.Y, out bool hitY, shouldLog ? "Y" : null);
-        if (hitY && movement.Y < 0) // FIX: Check original movement, not remainingMovement
+        for (int iteration = 0; iteration < maxIterations; iteration++)
         {
-            hitGround = true; // Hit ground when moving down
-        }
-        remainingMovement.Y = 0; // Y movement consumed
+            if (remainingMovement.LengthSquared() < 0.0001f)
+                break;  // No more movement to resolve
 
-        // Step 2: Move horizontally (X axis)
-        // Save original AABB before X movement for auto-jump testing
-        AABB originalAABB = aabb;
-        float xMovement = MoveAlongAxis(ref aabb, remainingMovement, Axis.X, out bool hitX, shouldLog ? "X" : null);
-        remainingMovement.X = 0; // X movement consumed
+            // Find earliest collision across all axes
+            CollisionResult collision = FindFirstCollision(aabb, remainingMovement);
 
-        // Step 3: If X movement blocked, check for auto-jump trigger
-        if (hitX && Math.Abs(movement.X) > 0.0001f && body != null && body.AutoJumpEnabled)
-        {
-            _logger?.LogInformation("[AUTO-JUMP] X-axis collision detected, movement.X={MovementX:F3}, checking auto-jump conditions...", movement.X);
-            _logger?.LogInformation("[AUTO-JUMP] hitGround={HitGround}, body!=null={BodyNotNull}", hitGround, body != null);
-
-            // Use original AABB (before X movement) for auto-jump testing
-            // This allows us to test if elevated positions can move forward
-            if (ShouldAutoJump(originalAABB, new Vector3(movement.X, 0, 0), hitGround))
+            if (collision.Hit)
             {
-                _logger?.LogInformation("[AUTO-JUMP] ShouldAutoJump returned TRUE! Attempting to trigger auto-jump...");
+                // Move to collision point
+                Vector3 moveToCollision = remainingMovement * collision.Time;
+                aabb = aabb.Offset(moveToCollision);
+                totalMovement += moveToCollision;
 
-                // Trigger auto-jump! (uses same smooth jump as spacebar)
-                // Note: We need a time source - use a simple frame counter for now
-                float currentTime = _autoJumpTimeCounter;
-                if (body?.TryStartAutoJump(5.0f, 0.3f, currentTime) == true)
+                // Check for ground hit (normal pointing up = ground)
+                if (collision.Normal.Y > 0.5f)
+                    hitGround = true;
+
+                // AUTO-JUMP DETECTION: If horizontal collision and grounded, check for climbable ledge
+                bool isHorizontalCollision = Math.Abs(collision.Normal.Y) < 0.1f;  // Normal is mostly horizontal
+                bool hasHorizontalMovement = Math.Abs(remainingMovement.X) > 0.0001f || Math.Abs(remainingMovement.Z) > 0.0001f;
+
+                if (!hasTriedAutoJump && isHorizontalCollision && hasHorizontalMovement &&
+                    body != null && body.AutoJumpEnabled && hitGround)
                 {
-                    _logger?.LogInformation("[AUTO-JUMP] SUCCESS! Auto-jump triggered on X axis (climbable ledge detected)");
-                }
-                else
-                {
-                    _logger?.LogInformation("[AUTO-JUMP] FAILED! Auto-jump on cooldown (last={Last:F2}, current={Current:F2})",
-                        currentTime - 0.5f, currentTime);
-                }
-            }
-            else
-            {
-                _logger?.LogInformation("[AUTO-JUMP] ShouldAutoJump returned FALSE (wall detected, not climbable)");
-            }
-        }
-        else if (hitX && Math.Abs(movement.X) > 0.0001f)
-        {
-            _logger?.LogInformation("[AUTO-JUMP] X-axis collision but body is null - no auto-jump check");
-        }
+                    // Extract horizontal component of remaining movement
+                    Vector3 horizontalMovement = new Vector3(remainingMovement.X, 0, remainingMovement.Z);
 
-        // Step 4: Move horizontally (Z axis)
-        // Save original AABB before Z movement for auto-jump testing
-        AABB originalAABBZ = aabb;
-        float zMovement = MoveAlongAxis(ref aabb, remainingMovement, Axis.Z, out bool hitZ, shouldLog ? "Z" : null);
-        remainingMovement.Z = 0; // Z movement consumed
+                    _logger?.LogInformation("[AUTO-JUMP] Horizontal collision detected on {Axis} axis, checking auto-jump conditions...",
+                        collision.CollisionAxis);
 
-        // Step 5: If Z movement blocked, check for auto-jump trigger
-        if (hitZ && Math.Abs(movement.Z) > 0.0001f && body != null && body.AutoJumpEnabled)
-        {
-            _logger?.LogInformation("[AUTO-JUMP] Z-axis collision detected, movement.Z={MovementZ:F3}, checking auto-jump conditions...", movement.Z);
-            _logger?.LogInformation("[AUTO-JUMP] hitGround={HitGround}, body!=null={BodyNotNull}", hitGround, body != null);
-
-            // Use original AABB (before Z movement) for auto-jump testing
-            // This allows us to test if elevated positions can move forward
-            if (ShouldAutoJump(originalAABBZ, new Vector3(0, 0, movement.Z), hitGround))
-            {
-                _logger?.LogInformation("[AUTO-JUMP] ShouldAutoJump returned TRUE! Attempting to trigger auto-jump...");
-
-                // Trigger auto-jump!
-                float currentTime = _autoJumpTimeCounter;
-                if (body?.TryStartAutoJump(5.0f, 0.3f, currentTime) == true)
-                {
-                    _logger?.LogInformation("[AUTO-JUMP] SUCCESS! Auto-jump triggered on Z axis (climbable ledge detected)");
-                }
-                else
-                {
-                    _logger?.LogInformation("[AUTO-JUMP] FAILED! Auto-jump on cooldown (last={Last:F2}, current={Current:F2})",
-                        currentTime - 0.5f, currentTime);
-                }
-            }
-            else
-            {
-                _logger?.LogInformation("[AUTO-JUMP] ShouldAutoJump returned FALSE (wall detected, not climbable)");
-            }
-        }
-        else if (hitZ && Math.Abs(movement.Z) > 0.0001f)
-        {
-            _logger?.LogInformation("[AUTO-JUMP] Z-axis collision but body is null - no auto-jump check");
-        }
-
-        return new Vector3(xMovement, yMovement, zMovement);
-    }
-
-    /// <summary>
-    /// Move the AABB along a single axis and resolve collisions.
-    /// </summary>
-    /// <param name="aabb">The AABB to move (modified in place)</param>
-    /// <param name="movement">Desired movement vector</param>
-    /// <param name="axis">Which axis to move along</param>
-    /// <param name="didCollide">Output: true if collision occurred</param>
-    /// <param name="axisLabel">Axis label for logging (null to disable logging)</param>
-    /// <returns>Actual movement distance along the axis</returns>
-    private float MoveAlongAxis(ref AABB aabb, Vector3 movement, Axis axis, out bool didCollide, string? axisLabel = null)
-    {
-        didCollide = false;
-
-        // Extract movement for this axis
-        float desiredMovement = axis switch
-        {
-            Axis.X => movement.X,
-            Axis.Y => movement.Y,
-            Axis.Z => movement.Z,
-            _ => 0
-        };
-
-        // Early out if no movement on this axis
-        if (Math.Abs(desiredMovement) < 0.0001f)
-            return 0;
-
-        // Calculate sweep bounds (current AABB + movement along axis)
-        AABB sweepAABB = aabb;
-        if (desiredMovement > 0)
-        {
-            // Moving positive direction
-            switch (axis)
-            {
-                case Axis.X: sweepAABB.Max.X += desiredMovement; break;
-                case Axis.Y: sweepAABB.Max.Y += desiredMovement; break;
-                case Axis.Z: sweepAABB.Max.Z += desiredMovement; break;
-            }
-        }
-        else
-        {
-            // Moving negative direction
-            switch (axis)
-            {
-                case Axis.X: sweepAABB.Min.X += desiredMovement; break;
-                case Axis.Y: sweepAABB.Min.Y += desiredMovement; break;
-                case Axis.Z: sweepAABB.Min.Z += desiredMovement; break;
-            }
-        }
-
-        // Query voxels in the sweep volume
-        float closestCollisionTime = 1.0f; // Time of collision (0 = start, 1 = end)
-        bool foundCollision = false;
-
-        // Calculate integer bounds for voxel iteration
-        int minX = (int)Math.Floor(sweepAABB.Min.X);
-        int maxX = (int)Math.Floor(sweepAABB.Max.X);
-        int minY = (int)Math.Floor(sweepAABB.Min.Y);
-        int maxY = (int)Math.Floor(sweepAABB.Max.Y);
-        int minZ = (int)Math.Floor(sweepAABB.Min.Z);
-        int maxZ = (int)Math.Floor(sweepAABB.Max.Z);
-
-        // Clamp Y to valid world height
-        minY = Math.Max(0, minY);
-        maxY = Math.Min(Chunk.WorldHeight - 1, maxY);
-
-        if (axisLabel != null && _logger != null)
-        {
-            int voxelCount = (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
-            _logger.LogDebug(
-                "[COLLISION] {Axis} axis: desiredMove={DesiredMove:F3} " +
-                "sweepAABB=({SMinX},{SMinY},{SMinZ})->({SMaxX},{SMaxY},{SMaxZ}) " +
-                "voxelRange=({VMinX},{VMinY},{VMinZ})->({VMaxX},{VMaxY},{VMaxZ}) count={Count}",
-                axisLabel, desiredMovement,
-                sweepAABB.Min.X, sweepAABB.Min.Y, sweepAABB.Min.Z,
-                sweepAABB.Max.X, sweepAABB.Max.Y, sweepAABB.Max.Z,
-                minX, minY, minZ, maxX, maxY, maxZ, voxelCount
-            );
-        }
-
-        // Iterate through all voxels in sweep volume
-        for (int x = minX; x <= maxX; x++)
-        {
-            for (int z = minZ; z <= maxZ; z++)
-            {
-                // CRITICAL: Check if chunk is loaded before querying blocks
-                Vector2i chunkPos = new Vector2i(x >> 4, z >> 4); // Divide by 16
-                if (!_world.HasChunk(chunkPos))
-                {
-                    // Unloaded chunk = treat as solid wall (safe fallback)
-                    // This prevents players from falling through unloaded chunks
-                    AABB voxelAABB = new AABB(
-                        new Vector3(x, minY, z),
-                        new Vector3(x + 1, maxY + 1, z + 1)
-                    );
-
-                    float collisionTime = CalculateCollisionTime(aabb, voxelAABB, desiredMovement, axis);
-                    if (collisionTime >= 0 && collisionTime < closestCollisionTime)
+                    if (ShouldAutoJump(aabb, horizontalMovement, hitGround))
                     {
-                        closestCollisionTime = collisionTime;
-                        foundCollision = true;
-                    }
-                    continue;
-                }
+                        _logger?.LogInformation("[AUTO-JUMP] ShouldAutoJump returned TRUE! Attempting to trigger auto-jump...");
 
-                for (int y = minY; y <= maxY; y++)
-                {
-                    // Query block type
-                    BlockType block = _world.GetBlock(x, y, z);
-
-                    // Skip air blocks
-                    if (block == BlockType.Air)
-                        continue;
-
-                    // Create AABB for this voxel (1x1x1 block)
-                    AABB voxelAABB = new AABB(
-                        new Vector3(x, y, z),
-                        new Vector3(x + 1, y + 1, z + 1)
-                    );
-
-                    // Calculate collision time with this voxel
-                    float collisionTime = CalculateCollisionTime(aabb, voxelAABB, desiredMovement, axis);
-
-                    // Update closest collision
-                    if (collisionTime >= 0 && collisionTime < closestCollisionTime)
-                    {
-                        closestCollisionTime = collisionTime;
-                        foundCollision = true;
-
-                        if (axisLabel != null && _logger != null)
+                        float currentTime = _autoJumpTimeCounter;
+                        if (body?.TryStartAutoJump(5.0f, 0.3f, currentTime) == true)
                         {
-                            _logger.LogDebug(
-                                "[COLLISION] {Axis} COLLIDED with block ({BlockX},{BlockY},{BlockZ}) type={BlockType} " +
-                                "at time={Time:F3}",
-                                axisLabel, x, y, z, block, collisionTime
-                            );
+                            _logger?.LogInformation("[AUTO-JUMP] SUCCESS! Auto-jump triggered (climbable ledge detected)");
                         }
+                        else
+                        {
+                            _logger?.LogInformation("[AUTO-JUMP] FAILED! Auto-jump on cooldown");
+                        }
+                        hasTriedAutoJump = true;  // Only try once per frame
+                    }
+                    else
+                    {
+                        _logger?.LogInformation("[AUTO-JUMP] ShouldAutoJump returned FALSE (wall detected, not climbable)");
                     }
                 }
-            }
-        }
 
-        // Calculate actual movement (stop at collision minus skin width)
-        float actualMovement;
-        if (foundCollision)
-        {
-            didCollide = true;
-            // Move to collision point, minus skin width to prevent overlap
-            actualMovement = desiredMovement * closestCollisionTime;
-            if (desiredMovement > 0)
-                actualMovement = Math.Max(0, actualMovement - SkinWidth);
+                // Slide along surface (remove component of velocity parallel to normal)
+                // This is vector projection: v' = v - (v · n)n
+                float dot = Vector3.Dot(remainingMovement, collision.Normal);
+                remainingMovement = remainingMovement - collision.Normal * dot;
+
+                // Small epsilon offset to prevent sticking to surface
+                const float epsilon = 0.0001f;
+                aabb = aabb.Offset(collision.Normal * epsilon);
+                totalMovement += collision.Normal * epsilon;
+            }
             else
-                actualMovement = Math.Min(0, actualMovement + SkinWidth);
-
-            if (axisLabel != null && _logger != null)
             {
-                _logger.LogDebug(
-                    "[COLLISION] {Axis} HIT: collisionTime={Time:F3} " +
-                    "desired={Desired:F3} actual={Actual:F3} (stopped)",
-                    axisLabel, closestCollisionTime, desiredMovement, actualMovement
-                );
-            }
-        }
-        else
-        {
-            actualMovement = desiredMovement;
-
-            if (axisLabel != null && _logger != null && Math.Abs(desiredMovement) > 0.0001f)
-            {
-                _logger.LogDebug(
-                    "[COLLISION] {Axis} FREE: desired={Desired:F3} (no collision)",
-                    axisLabel, desiredMovement
-                );
+                // No collision - move full remaining distance
+                aabb = aabb.Offset(remainingMovement);
+                totalMovement += remainingMovement;
+                break;
             }
         }
 
-        // Update AABB position
-        switch (axis)
-        {
-            case Axis.X:
-                aabb.Min.X += actualMovement;
-                aabb.Max.X += actualMovement;
-                break;
-            case Axis.Y:
-                aabb.Min.Y += actualMovement;
-                aabb.Max.Y += actualMovement;
-                break;
-            case Axis.Z:
-                aabb.Min.Z += actualMovement;
-                aabb.Max.Z += actualMovement;
-                break;
-        }
-
-        return actualMovement;
+        return totalMovement;
     }
+
 
     /// <summary>
     /// Calculate the time of collision between a moving AABB and a static AABB along one axis.
@@ -529,10 +320,170 @@ public class VoxelCollisionSystem
         return false; // No climbable ledge - it's a wall
     }
 
+    /// <summary>
+    /// Test collision along a single axis and return the collision time (0-1).
+    /// Returns -1 if no collision occurs.
+    /// </summary>
+    private float TestAxisCollision(AABB aabb, Vector3 movement, Axis axis)
+    {
+        // Extract movement for this axis
+        float desiredMovement = axis switch
+        {
+            Axis.X => movement.X,
+            Axis.Y => movement.Y,
+            Axis.Z => movement.Z,
+            _ => 0
+        };
+
+        // Early out if no movement on this axis
+        if (Math.Abs(desiredMovement) < 0.0001f)
+            return -1;
+
+        // Calculate sweep bounds (current AABB + movement along axis)
+        AABB sweepAABB = aabb;
+        if (desiredMovement > 0)
+        {
+            switch (axis)
+            {
+                case Axis.X: sweepAABB.Max.X += desiredMovement; break;
+                case Axis.Y: sweepAABB.Max.Y += desiredMovement; break;
+                case Axis.Z: sweepAABB.Max.Z += desiredMovement; break;
+            }
+        }
+        else
+        {
+            switch (axis)
+            {
+                case Axis.X: sweepAABB.Min.X += desiredMovement; break;
+                case Axis.Y: sweepAABB.Min.Y += desiredMovement; break;
+                case Axis.Z: sweepAABB.Min.Z += desiredMovement; break;
+            }
+        }
+
+        // Query voxels in the sweep volume
+        float closestCollisionTime = 1.0f;
+
+        // Calculate integer bounds for voxel iteration
+        int minX = (int)Math.Floor(sweepAABB.Min.X);
+        int maxX = (int)Math.Floor(sweepAABB.Max.X);
+        int minY = (int)Math.Floor(sweepAABB.Min.Y);
+        int maxY = (int)Math.Floor(sweepAABB.Max.Y);
+        int minZ = (int)Math.Floor(sweepAABB.Min.Z);
+        int maxZ = (int)Math.Floor(sweepAABB.Max.Z);
+
+        // Clamp Y to valid world height
+        minY = Math.Max(0, minY);
+        maxY = Math.Min(Chunk.WorldHeight - 1, maxY);
+
+        // Iterate through all voxels in sweep volume
+        for (int x = minX; x <= maxX; x++)
+        {
+            for (int z = minZ; z <= maxZ; z++)
+            {
+                // Check if chunk is loaded before querying blocks
+                Vector2i chunkPos = new Vector2i(x >> 4, z >> 4);
+                if (!_world.HasChunk(chunkPos))
+                {
+                    // Unloaded chunk = solid wall
+                    AABB voxelAABB = new AABB(
+                        new Vector3(x, minY, z),
+                        new Vector3(x + 1, maxY + 1, z + 1)
+                    );
+
+                    float collisionTime = CalculateCollisionTime(aabb, voxelAABB, desiredMovement, axis);
+                    if (collisionTime >= 0 && collisionTime < closestCollisionTime)
+                    {
+                        closestCollisionTime = collisionTime;
+                    }
+                    continue;
+                }
+
+                for (int y = minY; y <= maxY; y++)
+                {
+                    BlockType block = _world.GetBlock(x, y, z);
+
+                    if (block == BlockType.Air)
+                        continue;
+
+                    AABB voxelAABB = new AABB(
+                        new Vector3(x, y, z),
+                        new Vector3(x + 1, y + 1, z + 1)
+                    );
+
+                    float collisionTime = CalculateCollisionTime(aabb, voxelAABB, desiredMovement, axis);
+
+                    if (collisionTime >= 0 && collisionTime < closestCollisionTime)
+                    {
+                        closestCollisionTime = collisionTime;
+                    }
+                }
+            }
+        }
+
+        // Return -1 if no collision, otherwise return the collision time
+        return closestCollisionTime < 1.0f ? closestCollisionTime : -1;
+    }
+
+    /// <summary>
+    /// Get the surface normal for a collision on the given axis.
+    /// </summary>
+    private Vector3 GetNormalForAxis(Axis axis, Vector3 movement)
+    {
+        return axis switch
+        {
+            Axis.X => movement.X > 0 ? new Vector3(-1, 0, 0) : new Vector3(1, 0, 0),
+            Axis.Y => movement.Y > 0 ? new Vector3(0, -1, 0) : new Vector3(0, 1, 0),
+            Axis.Z => movement.Z > 0 ? new Vector3(0, 0, -1) : new Vector3(0, 0, 1),
+            _ => Vector3.Zero
+        };
+    }
+
+    /// <summary>
+    /// Find the first collision across all three axes.
+    /// Returns the earliest collision with timing and normal information.
+    /// </summary>
+    private CollisionResult FindFirstCollision(AABB aabb, Vector3 movement)
+    {
+        CollisionResult earliest = new CollisionResult
+        {
+            Hit = false,
+            Time = 1.0f,
+            Normal = Vector3.Zero,
+            CollisionAxis = Axis.X
+        };
+
+        // Test all three axes and keep track of earliest collision
+        foreach (Axis axis in new[] { Axis.X, Axis.Y, Axis.Z })
+        {
+            float time = TestAxisCollision(aabb, movement, axis);
+            if (time >= 0 && time < earliest.Time)
+            {
+                earliest.Hit = true;
+                earliest.Time = time;
+                earliest.CollisionAxis = axis;
+                earliest.Normal = GetNormalForAxis(axis, movement);
+            }
+        }
+
+        return earliest;
+    }
+
     private enum Axis
     {
         X,
         Y,
         Z
+    }
+
+    /// <summary>
+    /// Result of a collision test, containing timing and normal information.
+    /// Used by the iterative collision resolution system.
+    /// </summary>
+    private struct CollisionResult
+    {
+        public bool Hit;              // True if a collision occurred
+        public float Time;            // Time of collision (0-1, where 0=start, 1=end of movement)
+        public Vector3 Normal;        // Surface normal at collision point
+        public Axis CollisionAxis;    // Which axis the collision occurred on
     }
 }

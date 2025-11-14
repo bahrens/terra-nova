@@ -34,6 +34,14 @@ public struct Vector3 : IEquatable<Vector3>
         return vector.Normalized();
     }
 
+    /// <summary>
+    /// Calculate the dot product of two vectors.
+    /// </summary>
+    public static float Dot(Vector3 left, Vector3 right)
+    {
+        return left.X * right.X + left.Y * right.Y + left.Z * right.Z;
+    }
+
     public static readonly Vector3 Zero = new Vector3(0, 0, 0);
 
     public readonly bool Equals(Vector3 other)
