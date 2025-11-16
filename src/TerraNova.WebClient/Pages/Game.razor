@@ -7,17 +7,21 @@
 @code {
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-      if (firstRender)
-      {
-        var success = await JS.InvokeAsync<bool>("terraNova.init", "gameCanvas");
-
-        if (success)
+        if (firstRender)
         {
-          await JS.InvokeVoidAsync("terraNova.setViewport", 800, 600);
+            var success = await JS.InvokeAsync<bool>("terraNova.init", "gameCanvas");
 
-          await JS.InvokeVoidAsync("terraNova.startRenderLoop");
+            if (success)
+            {
+                await JS.InvokeVoidAsync("terraNova.setViewport", 800, 600);
+
+                await JS.InvokeVoidAsync("terraNova.startRenderLoop");
+            }
+            else
+            {
+                Console.Error.WriteLine("Failed to initialize WebGL");
+            }
         }
-      }
     }
 
     [JSInvokable]
@@ -27,6 +31,6 @@
 
     public async ValueTask DisposeAsync()
     {
-      await JS.InvokeVoidAsync("terraNova.stopRenderLoop");
+        await JS.InvokeVoidAsync("terraNova.stopRenderLoop");
     }
   }
