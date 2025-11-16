@@ -1,5 +1,6 @@
 @page "/"
 @inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <canvas id="gameCanvas" width="800" height="600"></canvas>
 
@@ -24,8 +25,8 @@
     {
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-      JS.InvokeVoidAsync("terraNova.stopRenderLoop");
+      await JS.InvokeVoidAsync("terraNova.stopRenderLoop");
     }
   }
