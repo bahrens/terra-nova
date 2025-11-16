@@ -284,7 +284,7 @@ window.terraNova = {
       // Update WebGL viewport
       this.gl.viewport(0, 0, displayWidth, displayHeight);
 
-      console.log('Canvas resized to ${displayWidth}x${displayHeight}');
+      console.log(`Canvas resized to ${displayWidth}x${displayHeight}`);
     }
   }
 };
