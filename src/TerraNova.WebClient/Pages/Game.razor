@@ -4,27 +4,23 @@
 <canvas id="gameCanvas" width="800" height="600"></canvas>
 
 @code {
-    private IJSRuntime? jsRuntime;
-
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
       if (firstRender)
       {
-        jsRuntime = JS;
-
         var success = await JS.InvokeAsync<bool>("terraNova.init", "gameCanvas");
 
         if (success)
         {
-          await jsRuntime.InvokeVoidAsync("terraNova.setViewport", 800, 600);
+          await JS.InvokeVoidAsync("terraNova.setViewport", 800, 600);
 
-          RenderFrame();
+          await RenderFrame();
         }
       }
     }
 
-    private ValueTask? RenderFrame()
+    private ValueTask RenderFrame()
     {
-      return jsRuntime?.InvokeVoidAsync("terraNova.clear", 0.2f, 0.4f, 0.8f, 1.0f);
+      return JS.InvokeVoidAsync("terraNova.clear", 0.2f, 0.4f, 0.8f, 1.0f);
     }
   }
