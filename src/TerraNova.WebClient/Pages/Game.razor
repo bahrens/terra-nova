@@ -16,8 +16,6 @@
 
             if (success)
             {
-                await JS.InvokeVoidAsync("terraNova.setViewport", 800, 600);
-
                 await JS.InvokeVoidAsync("terraNova.startRenderLoop", _dotNetRef);
             }
             else

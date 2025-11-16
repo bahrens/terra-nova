@@ -33,6 +33,12 @@ window.terraNova = {
       return false;
     }
 
+    // Set initial size
+    this.resizeCanvas();
+
+    // Add resize listener
+    window.addEventListener('resize', () => this.resizeCanvas());
+
     // Enable depth testing for 3D rendering
     this.gl.enable(this.gl.DEPTH_TEST);
     this.gl.depthFunc(this.gl.LEQUAL);
@@ -43,17 +49,6 @@ window.terraNova = {
 
     console.log('WebGL initialized successfully');
     return true;
-  },
-
-  /**
-   * Set viewport size
-   * @param {number} width
-   * @param {number} height
-   */
-  setViewport: function (width, height) {
-    this.gl.viewport(0, 0, width, height);
-    this.canvas.width = width;
-    this.canvas.height = height;
   },
 
   /**
@@ -262,4 +257,25 @@ window.terraNova = {
       requestAnimationFrame(() => this.renderLoop());
     }
   },
+
+
+  /**
+   * Resize canvas to fill viewport
+  */
+  resizeCanvas: function () {
+    const displayWidth = this.canvas.clientWidth;
+    const displayHeight = this.canvas.clientHeight;
+
+    // Check if canvas internal sizing needs updating
+    if (this.canvas.width !== displayWidth
+      || this.canvas.height !== displayHeight) {
+      this.canvas.width = displayWidth;
+      this.canvas.height = displayHeight;
+
+      // Update WebGL viewport
+      this.gl.viewport(0, 0, displayWidth, displayHeight);
+
+      console.log('Canvas resized to ${displayWidth}x${displayHeight}');
+    }
+  }
 };
