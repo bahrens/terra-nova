@@ -252,14 +252,14 @@ window.terraNova = {
    * Main render loop using requestAnimationFrame
    */
   renderLoop: function () {
-    if (!this.isRunning) return;
-
     if (this.dotNetHelper) {
       this.dotNetHelper.invokeMethodAsync('OnUpdate');
     }
 
     this.clear(0.2, 0.4, 0.8, 1.0);
 
-    requestAnimationFrame(() => this.renderLoop());
+    if (this.isRunning) {
+      requestAnimationFrame(() => this.renderLoop());
+    }
   },
 };
