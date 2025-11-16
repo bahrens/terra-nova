@@ -118,6 +118,13 @@ window.terraNova = {
     gl.deleteShader(fragmentShader);
 
     console.log('Shader program created successfully');
+
+    this.attribLocations = {
+      position: gl.getAttribLocation(this.program, 'aPosition'),
+      normal: gl.getAttribLocation(this.program, 'aNormal'),
+      textCoord: gl.getAttribLocation(this.program, 'aTexCoord')
+    };
+
     return true;
   },
 
