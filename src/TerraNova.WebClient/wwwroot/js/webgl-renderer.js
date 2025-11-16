@@ -142,12 +142,14 @@ window.terraNova = {
     const buffer = this.buffers[chunkId];
 
     // Upload vertex data
+    const vertexData = vertices instanceof Float32Array ? vertices : new Float32Array(vertices);
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer.vertex);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, vertexData, gl.STATIC_DRAW);
 
     // Upload index data
+    const indexData = indices instanceof Uint16Array ? indices : new Uint16Array(indices);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffer.index);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indexData, gl.STATIC_DRAW);
 
     buffer.indexCount = indices.length;
   },
