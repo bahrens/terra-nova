@@ -12,6 +12,7 @@ window.terraNova = {
 
   isRunning: false,
   dotNetHelper: null,
+  lastFrameTime: 0,
 
   /**
    * Initialize WebGL context
@@ -242,7 +243,8 @@ window.terraNova = {
   startRenderLoop: function (dotNetHelper) {
     this.dotNetHelper = dotNetHelper;
     this.isRunning = true;
-    this.renderLoop();
+    this.lastFrameTime = performance.now();
+    requestAnimationFrame((time) => this.renderLoop(time));
   },
 
   /**
@@ -254,19 +256,25 @@ window.terraNova = {
 
   /**
    * Main render loop using requestAnimationFrame
+   * @param {number} currentTime - Timestamp from requestAnimationFrame (in milliseconds)
    */
-  renderLoop: function () {
+  renderLoop: function (currentTime) {
+    if (!this.isRunning) return;
+
+    // Calculate delta time in seconds
+    const deltaTime = (currentTime - this.lastFrameTime) / 1000.0;
+    this.lastFrameTime = currentTime;
+
     if (this.dotNetHelper) {
-      this.dotNetHelper.invokeMethodAsync('OnUpdate');
+      this.dotNetHelper.invokeMethodAsync('OnUpdate', deltaTime);
     }
 
     this.clear(0.2, 0.4, 0.8, 1.0);
 
     if (this.isRunning) {
-      requestAnimationFrame(() => this.renderLoop());
+      requestAnimationFrame((time) => this.renderLoop(time));
     }
   },
-
 
   /**
    * Resize canvas to fill viewport
