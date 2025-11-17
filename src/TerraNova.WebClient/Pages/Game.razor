@@ -1,0 +1,38 @@
+@page "/"
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
+@code {
+    private DotNetObjectReference<Game>? _dotNetRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            var success = await JS.InvokeAsync<bool>("terraNova.init", "gameCanvas");
+
+            if (success)
+            {
+                await JS.InvokeVoidAsync("terraNova.startRenderLoop", _dotNetRef);
+            }
+            else
+            {
+                Console.Error.WriteLine("Failed to initialize WebGL");
+            }
+        }
+    }
+
+    [JSInvokable]
+    public void OnUpdate(float deltaTime)
+    {
+      TODO: Implementation will come later
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await JS.InvokeVoidAsync("terraNova.stopRenderLoop");
+    }
+  }
