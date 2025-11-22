@@ -7,17 +7,16 @@ public record Viewport
     public int Width { get; init; }
     public int Height { get; init; }
 
-
     public Viewport(int x, int y, int width, int height)
     {
-        if (width < 0)
+        if (width <= 0)
         {
-            throw new ArgumentException("Width cannot be negative.", nameof(width));
+            throw new ArgumentException("Width cannot be negative or zero.", nameof(width));
         }
 
-        if (height < 0)
+        if (height <= 0)
         {
-            throw new ArgumentException("Height cannot be negative.", nameof(height));
+            throw new ArgumentException("Height cannot be negative or zero.", nameof(height));
         }
 
         if (x < 0)
