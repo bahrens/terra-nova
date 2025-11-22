@@ -29,6 +29,11 @@ public record Viewport
         {
             throw new ArgumentException("Y cannot be negative.", nameof(y));
         }
+
+        X = x;
+        Y = y;
+        Width = width;
+        Height = height;
     }
 
     public static Viewport Fullscreen(int width, int height) => new Viewport(0, 0, width, height);
