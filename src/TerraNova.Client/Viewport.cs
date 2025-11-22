@@ -11,22 +11,22 @@ public record Viewport
     {
         if (width <= 0)
         {
-            throw new ArgumentException("Width cannot be negative or zero.", nameof(width));
+            throw new ArgumentOutOfRangeException("Width cannot be negative or zero.", nameof(width));
         }
 
         if (height <= 0)
         {
-            throw new ArgumentException("Height cannot be negative or zero.", nameof(height));
+            throw new ArgumentOutOfRangeException("Height cannot be negative or zero.", nameof(height));
         }
 
         if (x < 0)
         {
-            throw new ArgumentException("X cannot be negative.", nameof(x));
+            throw new ArgumentOutOfRangeException("X cannot be negative.", nameof(x));
         }
 
         if (y < 0)
         {
-            throw new ArgumentException("Y cannot be negative.", nameof(y));
+            throw new ArgumentOutOfRangeException("Y cannot be negative.", nameof(y));
         }
 
         X = x;
