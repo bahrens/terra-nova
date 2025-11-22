@@ -1,17 +1,33 @@
 ﻿namespace TerraNova.Client;
 
-public record Viewport(int X, int Y, int Width, int Height)
+public record Viewport
 {
-    public Viewport(int width, int height) : this(0, 0, width, height)
+    public int X { get; init; }
+    public int Y { get; init; }
+    public int Width { get; init; }
+    public int Height { get; init; }
+
+
+    public Viewport(int x, int y, int width, int height)
     {
         if (width < 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(width), "Width must be non-negative.");
+            throw new ArgumentException("Width cannot be negative.", nameof(width));
         }
 
         if (height < 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(height), "Height must be non-negative.");
+            throw new ArgumentException("Height cannot be negative.", nameof(height));
+        }
+
+        if (x < 0)
+        {
+            throw new ArgumentException("X cannot be negative.", nameof(x));
+        }
+
+        if (y < 0)
+        {
+            throw new ArgumentException("Y cannot be negative.", nameof(y));
         }
     }
 
