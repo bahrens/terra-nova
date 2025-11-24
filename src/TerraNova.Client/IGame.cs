@@ -2,7 +2,7 @@
 
 public interface IGame
 {
-    void Load(Viewport viewport);
+    void Load(ViewportInfo viewport);
 
     void Update(double deltaTime);
 
@@ -10,5 +10,5 @@ public interface IGame
 
     void Unload();
 
-    void Resize(Viewport viewport);
+    void Resize(ViewportInfo viewport);
 }
