@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace TerraNova.Client;
+namespace TerraNova.Client.Rendering;
 
 public interface ICameraView
 {

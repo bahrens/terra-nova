@@ -1,4 +1,6 @@
-﻿namespace TerraNova.Client;
+﻿using TerraNova.Client.Math;
+
+namespace TerraNova.Client;
 
 public interface IGame
 {
