@@ -1,4 +1,4 @@
-namespace TerraNova.Client;
+namespace TerraNova.Client.Math;
 
 public readonly struct Vector2i
 {

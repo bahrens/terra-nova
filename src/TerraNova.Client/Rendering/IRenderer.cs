@@ -1,6 +1,6 @@
-using System.Numerics;
+using TerraNova.Client.Math;
 
-namespace TerraNova.Client;
+namespace TerraNova.Client.Rendering;
 
 public interface IRenderer
 {

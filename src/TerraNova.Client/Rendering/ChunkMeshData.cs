@@ -1,4 +1,4 @@
-namespace TerraNova.Client;
+namespace TerraNova.Client.Rendering;
 
 public class ChunkMeshData
 {
