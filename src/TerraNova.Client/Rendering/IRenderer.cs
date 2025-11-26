@@ -10,4 +10,5 @@ public interface IRenderer
     void RemoveChunk(Vector2i chunkPosition);
     void Render(ViewportInfo viewport);
     void Update(double deltaTime);
+    void Resize(ViewportInfo viewport);
 }

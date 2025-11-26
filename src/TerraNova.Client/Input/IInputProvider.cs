@@ -15,11 +15,11 @@ public interface IInputProvider
 
     bool IsKeyReleased(KeyCode keyCode);
 
-    bool IsMouseButtonDown(MouseButton mouseButton);
+    bool IsMouseButtonDown(MouseButtonCode mouseButton);
 
-    bool IsMouseButtonPressed(MouseButton mouseButton);
+    bool IsMouseButtonPressed(MouseButtonCode mouseButton);
 
-    bool IsMouseButtonReleased(MouseButton mouseButton);
+    bool IsMouseButtonReleased(MouseButtonCode mouseButton);
 
     Vector2 MousePosition { get; }
 

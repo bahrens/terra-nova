@@ -1,59 +1,67 @@
-using OpenTK.Graphics.OpenGL4;
 using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
+using TerraNova.Client;
+using TerraNova.Client.Input;
+using TerraNova.Client.Math;
+using TerraNova.OpenTkClient.Input;
+using TerraNova.OpenTkClient.Rendering;
 
 namespace TerraNova.OpenTkClient;
 
 public class TerraNovaWindow : GameWindow
 {
+    private readonly TerraNovaGame _game;
+    private readonly IInputSystem _inputSystem;
+
     public TerraNovaWindow(
         GameWindowSettings gameWindowSettings,
         NativeWindowSettings nativeWindowSettings
     )
-        : base(gameWindowSettings, nativeWindowSettings) { }
+        : base(gameWindowSettings, nativeWindowSettings)
+    {
+        var renderer = new OpenTkRenderer();
+        _inputSystem = new OpenTkInputSystem(this);
+        _game = new TerraNovaGame(renderer, _inputSystem);
+    }
 
     protected override void OnLoad()
     {
         base.OnLoad();
-
-        GL.ClearColor(0.2f, 0.4f, 0.8f, 1.0f);
-
-        GL.Enable(EnableCap.DepthTest);
-        GL.DepthFunc(DepthFunction.Lequal);
-
-        GL.Enable(EnableCap.CullFace);
-        GL.CullFace(TriangleFace.Back);
-    }
-
-    protected override void OnRenderFrame(FrameEventArgs args)
-    {
-        base.OnRenderFrame(args);
-
-        GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-
-        SwapBuffers();
+        _game.Load(new ViewportInfo(Size.X, Size.Y));
     }
 
     protected override void OnUpdateFrame(FrameEventArgs args)
     {
         base.OnUpdateFrame(args);
 
-        if (KeyboardState.IsKeyDown(Keys.Escape))
+        _inputSystem.BeginFrame();
+        _game.Update(args.Time);
+
+        if (_inputSystem.IsKeyPressed(KeyCode.Escape))
         {
             Close();
         }
     }
 
-    protected override void OnUnload()
+    protected override void OnRenderFrame(FrameEventArgs args)
     {
-        base.OnUnload();
+        base.OnRenderFrame(args);
+
+        _game.Render();
+
+        SwapBuffers();
     }
 
     protected override void OnResize(ResizeEventArgs args)
     {
         base.OnResize(args);
+        _game.Resize(new ViewportInfo(args.Width, args.Height));
+    }
 
-        GL.Viewport(0, 0, args.Width, args.Height);
+    protected override void OnUnload()
+    {
+        base.OnUnload();
+        _game.Unload();
     }
 }
