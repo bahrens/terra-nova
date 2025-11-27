@@ -4,13 +4,13 @@ namespace TerraNova.Client;
 
 public interface IGame
 {
-    void Load(ViewportInfo viewport);
+    Task LoadAsync(ViewportInfo viewport);
 
     void Update(double deltaTime);
 
     void Render();
 
-    void Unload();
+    Task UnloadAsync();
 
     void Resize(ViewportInfo viewport);
 }

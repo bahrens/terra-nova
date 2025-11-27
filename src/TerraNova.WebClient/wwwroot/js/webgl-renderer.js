@@ -12,6 +12,7 @@ window.terraNova = {
 
   isRunning: false,
   dotNetHelper: null,
+  resizeDotNetHelper: null,
   lastFrameTime: 0,
 
   /**
@@ -265,11 +266,13 @@ window.terraNova = {
     const deltaTime = (currentTime - this.lastFrameTime) / 1000.0;
     this.lastFrameTime = currentTime;
 
+    // Clear screen
+    this.clear(0.2, 0.4, 0.8, 1.0);
+
+    // Let C# handle update and rendering
     if (this.dotNetHelper) {
       this.dotNetHelper.invokeMethodAsync('OnUpdate', deltaTime);
     }
-
-    this.clear(0.2, 0.4, 0.8, 1.0);
 
     if (this.isRunning) {
       requestAnimationFrame((time) => this.renderLoop(time));
@@ -294,5 +297,54 @@ window.terraNova = {
 
       console.log(`Canvas resized to ${displayWidth}x${displayHeight}`);
     }
+  },
+
+  /**
+   * Clean up all WebGL resources
+   */
+  cleanup: function () {
+    const gl = this.gl;
+    if (!gl) return;
+
+    // Delete all chunk buffers
+    Object.values(this.buffers).forEach(buffer => {
+      gl.deleteBuffer(buffer.vertex);
+      gl.deleteBuffer(buffer.index);
+    });
+    this.buffers = {};
+
+    // Delete shader program
+    if (this.program) {
+      gl.deleteProgram(this.program);
+      this.program = null;
+    }
+
+    console.log('WebGL resources cleaned up');
+  },
+
+  /**
+   * Set up resize listener that notifies .NET
+   * @param {object} dotNetHelper - .NET object reference for callbacks
+   */
+  addResizeListener: function (dotNetHelper) {
+    this.resizeDotNetHelper = dotNetHelper;
+    this._resizeHandler = () => {
+      this.resizeCanvas();
+      if (this.resizeDotNetHelper) {
+        this.resizeDotNetHelper.invokeMethodAsync('OnResize', this.canvas.width, this.canvas.height);
+      }
+    };
+    window.addEventListener('resize', this._resizeHandler);
+  },
+
+  /**
+   * Remove resize listener
+   */
+  removeResizeListener: function () {
+    if (this._resizeHandler) {
+      window.removeEventListener('resize', this._resizeHandler);
+      this._resizeHandler = null;
+    }
+    this.resizeDotNetHelper = null;
   }
 };

@@ -16,10 +16,10 @@ public class TerraNovaGame : IGame
         _inputProvider = inputProvider;
     }
 
-    public void Load(ViewportInfo viewport)
+    public async Task LoadAsync(ViewportInfo viewport)
     {
         _viewport = viewport;
-        _renderer.Initialize();
+        await _renderer.InitializeAsync();
     }
 
     public void Render()
@@ -33,9 +33,9 @@ public class TerraNovaGame : IGame
         _renderer.Resize(viewport);
     }
 
-    public void Unload()
+    public async Task UnloadAsync()
     {
-        // TODO: Implement unload logic
+        await _renderer.DisposeAsync();
     }
 
     public void Update(double deltaTime)

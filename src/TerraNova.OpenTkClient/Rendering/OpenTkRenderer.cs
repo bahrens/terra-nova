@@ -6,7 +6,7 @@ namespace TerraNova.OpenTkClient.Rendering;
 
 public class OpenTkRenderer : IRenderer
 {
-    public void Initialize()
+    public Task InitializeAsync()
     {
         GL.ClearColor(0.2f, 0.4f, 0.8f, 1.0f);
 
@@ -15,6 +15,8 @@ public class OpenTkRenderer : IRenderer
 
         GL.Enable(EnableCap.CullFace);
         GL.CullFace(TriangleFace.Back);
+
+        return Task.CompletedTask;
     }
 
     public void RemoveChunk(Vector2i chunkPosition)
@@ -45,5 +47,11 @@ public class OpenTkRenderer : IRenderer
     public void Resize(ViewportInfo viewport)
     {
         GL.Viewport(0, 0, viewport.Width, viewport.Height);
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        // TODO: Delete shader programs, buffers, textures when implemented
+        return ValueTask.CompletedTask;
     }
 }

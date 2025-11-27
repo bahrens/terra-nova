@@ -1,21 +1,37 @@
 @page "/"
 @inject IJSRuntime JS
 @implements IAsyncDisposable
+@using TerraNova.Client
+@using TerraNova.Client.Math
+@using TerraNova.WebClient.Rendering
+@using TerraNova.WebClient.Input
 
 <canvas id="gameCanvas" width="800" height="600"></canvas>
 
 @code {
     private DotNetObjectReference<Game>? _dotNetRef;
+    private TerraNovaGame? _game;
+    private WebGLRenderer? _renderer;
+    private WebGLInputSystem? _inputSystem;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            _dotNetRef = DotNetObjectReference.Create(this);
             var success = await JS.InvokeAsync<bool>("terraNova.init", "gameCanvas");
 
             if (success)
             {
+                _renderer = new WebGLRenderer(JS);
+                _inputSystem = new WebGLInputSystem(JS);
+                _game = new TerraNovaGame(_renderer, _inputSystem);
+
+                // Get initial viewport size
+                var size = await JS.InvokeAsync<CanvasSize>("terraNova.getCanvasSize");
+                await _game.LoadAsync(new ViewportInfo(size.Width, size.Height));
+
+                _dotNetRef = DotNetObjectReference.Create(this);
+                await JS.InvokeVoidAsync("terraNova.addResizeListener", _dotNetRef);
                 await JS.InvokeVoidAsync("terraNova.startRenderLoop", _dotNetRef);
             }
             else
@@ -28,11 +44,27 @@
     [JSInvokable]
     public void OnUpdate(float deltaTime)
     {
-      // TODO: Implementation will come later
+        _inputSystem?.BeginFrame();
+        _game?.Update(deltaTime);
+        _game?.Render();
+    }
+
+    [JSInvokable]
+    public void OnResize(int width, int height)
+    {
+        _game?.Resize(new ViewportInfo(width, height));
     }
 
     public async ValueTask DisposeAsync()
     {
         await JS.InvokeVoidAsync("terraNova.stopRenderLoop");
+        await JS.InvokeVoidAsync("terraNova.removeResizeListener");
+        _dotNetRef?.Dispose();
+        if (_game != null)
+        {
+            await _game.UnloadAsync();
+        }
     }
-  }
+
+    private record CanvasSize(int Width, int Height);
+}

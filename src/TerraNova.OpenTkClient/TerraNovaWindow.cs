@@ -28,7 +28,7 @@ public class TerraNovaWindow : GameWindow
     protected override void OnLoad()
     {
         base.OnLoad();
-        _game.Load(new ViewportInfo(Size.X, Size.Y));
+        _game.LoadAsync(new ViewportInfo(Size.X, Size.Y)).Wait();
     }
 
     protected override void OnUpdateFrame(FrameEventArgs args)
@@ -62,6 +62,6 @@ public class TerraNovaWindow : GameWindow
     protected override void OnUnload()
     {
         base.OnUnload();
-        _game.Unload();
+        _game.UnloadAsync().Wait();
     }
 }
