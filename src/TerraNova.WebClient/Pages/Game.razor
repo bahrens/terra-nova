@@ -58,12 +58,15 @@
     public async ValueTask DisposeAsync()
     {
         await JS.InvokeVoidAsync("terraNova.stopRenderLoop");
-        await JS.InvokeVoidAsync("terraNova.removeResizeListener");
-        _dotNetRef?.Dispose();
+        
         if (_game != null)
         {
             await _game.UnloadAsync();
         }
+
+        await JS.InvokeVoidAsync("terraNova.removeResizeListener");
+        
+        _dotNetRef?.Dispose();
     }
 
     private record CanvasSize(int Width, int Height);
