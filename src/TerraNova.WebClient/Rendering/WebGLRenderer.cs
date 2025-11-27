@@ -13,11 +13,22 @@ public class WebGLRenderer : IRenderer
         _jsRuntime = jsRuntime;
     }
 
-    public Task InitializeAsync()
+    /// <summary>
+    /// Platform-specific async preparation for WebGL.
+    /// Called by Game.razor BEFORE TerraNovaGame.Load().
+    /// This handles async JS interop (shader compilation, buffer creation, etc.)
+    /// </summary>
+    public async Task PrepareAsync()
     {
         // WebGL context already initialized via JS terraNova.init()
-        // Shaders will be loaded in Phase 1.6
-        return Task.CompletedTask;
+        // Future: async shader compilation, texture loading, etc.
+        await Task.CompletedTask;
+    }
+
+    public void Initialize()
+    {
+        // Synchronous state setup after PrepareAsync() completes
+        // All async JS work is done, now just set initial state
     }
 
     public void SetCamera(ICameraView cameraView)
@@ -50,8 +61,9 @@ public class WebGLRenderer : IRenderer
         // Handled by JS resizeCanvas() via resize listener
     }
 
-    public async ValueTask DisposeAsync()
+    public void Dispose()
     {
-        await _jsRuntime.InvokeVoidAsync("terraNova.cleanup");
+        // C#-side cleanup only
+        // JS cleanup (terraNova.cleanup) is handled by Game.razor.DisposeAsync()
     }
 }

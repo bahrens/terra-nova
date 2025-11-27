@@ -22,13 +22,16 @@
 
             if (success)
             {
+                // Create renderer and do platform-specific async preparation
                 _renderer = new WebGLRenderer(JS);
+                await _renderer.PrepareAsync();
+
                 _inputSystem = new WebGLInputSystem(JS);
                 _game = new TerraNovaGame(_renderer, _inputSystem);
 
-                // Get initial viewport size
+                // Synchronous game initialization (orchestrates renderer.Initialize())
                 var size = await JS.InvokeAsync<CanvasSize>("terraNova.getCanvasSize");
-                await _game.LoadAsync(new ViewportInfo(size.Width, size.Height));
+                _game.Load(new ViewportInfo(size.Width, size.Height));
 
                 _dotNetRef = DotNetObjectReference.Create(this);
                 await JS.InvokeVoidAsync("terraNova.addResizeListener", _dotNetRef);
@@ -58,14 +61,14 @@
     public async ValueTask DisposeAsync()
     {
         await JS.InvokeVoidAsync("terraNova.stopRenderLoop");
-        
-        if (_game != null)
-        {
-            await _game.UnloadAsync();
-        }
 
+        // Synchronous game disposal
+        _game?.Dispose();
+
+        // Platform-specific async JS cleanup
+        await JS.InvokeVoidAsync("terraNova.cleanup");
         await JS.InvokeVoidAsync("terraNova.removeResizeListener");
-        
+
         _dotNetRef?.Dispose();
     }
 

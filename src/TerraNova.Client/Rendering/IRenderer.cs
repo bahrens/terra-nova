@@ -2,13 +2,14 @@ using TerraNova.Client.Math;
 
 namespace TerraNova.Client.Rendering;
 
-public interface IRenderer : IAsyncDisposable
+public interface IRenderer : IDisposable
 {
     /// <summary>
     /// Initialize renderer and create GPU resources.
     /// Called once after construction, before first Render().
+    /// Platform-specific async preparation must be complete before calling this.
     /// </summary>
-    Task InitializeAsync();
+    void Initialize();
 
     /// <summary>
     /// Set active camera for rendering.

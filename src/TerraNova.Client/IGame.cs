@@ -1,16 +1,14 @@
-﻿using TerraNova.Client.Math;
+using TerraNova.Client.Math;
 
 namespace TerraNova.Client;
 
-public interface IGame
+public interface IGame : IDisposable
 {
-    Task LoadAsync(ViewportInfo viewport);
+    void Load(ViewportInfo viewport);
 
     void Update(double deltaTime);
 
     void Render();
-
-    Task UnloadAsync();
 
     void Resize(ViewportInfo viewport);
 }
