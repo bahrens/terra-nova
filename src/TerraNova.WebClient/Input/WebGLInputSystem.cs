@@ -7,6 +7,7 @@ namespace TerraNova.WebClient.Input;
 public class WebGLInputSystem : IInputSystem
 {
     private readonly IJSRuntime _jsRuntime;
+    private readonly object _inputLock = new();
 
     // Keyboard state tracking
     private readonly HashSet<KeyCode> _currentKeys = new();
@@ -32,29 +33,52 @@ public class WebGLInputSystem : IInputSystem
 
     public void BeginFrame()
     {
-        // Copy current to previous
-        _previousKeys.Clear();
-        foreach (var key in _currentKeys)
-            _previousKeys.Add(key);
+        lock (_inputLock)
+        {
+            // Copy current to previous
+            _previousKeys.Clear();
+            _previousKeys.UnionWith(_currentKeys);
 
-        _previousMouseButtons.Clear();
-        foreach (var button in _currentMouseButtons)
-            _previousMouseButtons.Add(button);
+            _previousMouseButtons.Clear();
+            _previousMouseButtons.UnionWith(_currentMouseButtons);
 
-        _previousMousePosition = _currentMousePosition;
+            _previousMousePosition = _currentMousePosition;
 
-        // Transfer accumulated scroll to this frame's delta, then reset accumulator
-        _mouseScrollDelta = _accumulatedScrollDelta;
-        _accumulatedScrollDelta = 0f;
+            // Transfer accumulated scroll to this frame's delta, then reset accumulator
+            _mouseScrollDelta = _accumulatedScrollDelta;
+            _accumulatedScrollDelta = 0f;
+        }
     }
 
-    public bool IsKeyDown(KeyCode keyCode) => _currentKeys.Contains(keyCode);
-    public bool IsKeyPressed(KeyCode keyCode) => _currentKeys.Contains(keyCode) && !_previousKeys.Contains(keyCode);
-    public bool IsKeyReleased(KeyCode keyCode) => !_currentKeys.Contains(keyCode) && _previousKeys.Contains(keyCode);
+    public bool IsKeyDown(KeyCode keyCode)
+    {
+        lock (_inputLock) return _currentKeys.Contains(keyCode);
+    }
 
-    public bool IsMouseButtonDown(MouseButtonCode button) => _currentMouseButtons.Contains(button);
-    public bool IsMouseButtonPressed(MouseButtonCode button) => _currentMouseButtons.Contains(button) && !_previousMouseButtons.Contains(button);
-    public bool IsMouseButtonReleased(MouseButtonCode button) => !_currentMouseButtons.Contains(button) && _previousMouseButtons.Contains(button);
+    public bool IsKeyPressed(KeyCode keyCode)
+    {
+        lock (_inputLock) return _currentKeys.Contains(keyCode) && !_previousKeys.Contains(keyCode);
+    }
+
+    public bool IsKeyReleased(KeyCode keyCode)
+    {
+        lock (_inputLock) return !_currentKeys.Contains(keyCode) && _previousKeys.Contains(keyCode);
+    }
+
+    public bool IsMouseButtonDown(MouseButtonCode button)
+    {
+        lock (_inputLock) return _currentMouseButtons.Contains(button);
+    }
+
+    public bool IsMouseButtonPressed(MouseButtonCode button)
+    {
+        lock (_inputLock) return _currentMouseButtons.Contains(button) && !_previousMouseButtons.Contains(button);
+    }
+
+    public bool IsMouseButtonReleased(MouseButtonCode button)
+    {
+        lock (_inputLock) return !_currentMouseButtons.Contains(button) && _previousMouseButtons.Contains(button);
+    }
 
     // Called from JS to update key state
     [JSInvokable]
@@ -62,7 +86,9 @@ public class WebGLInputSystem : IInputSystem
     {
         var keyCode = MapJsKey(key);
         if (keyCode != KeyCode.None)
-            _currentKeys.Add(keyCode);
+        {
+            lock (_inputLock) _currentKeys.Add(keyCode);
+        }
     }
 
     [JSInvokable]
@@ -70,33 +96,35 @@ public class WebGLInputSystem : IInputSystem
     {
         var keyCode = MapJsKey(key);
         if (keyCode != KeyCode.None)
-            _currentKeys.Remove(keyCode);
+        {
+            lock (_inputLock) _currentKeys.Remove(keyCode);
+        }
     }
 
     [JSInvokable]
     public void OnMouseMove(float x, float y)
     {
-        _currentMousePosition = new Vector2(x, y);
+        lock (_inputLock) _currentMousePosition = new Vector2(x, y);
     }
 
     [JSInvokable]
     public void OnMouseDown(int button)
     {
         var btn = MapJsMouseButton(button);
-        _currentMouseButtons.Add(btn);
+        lock (_inputLock) _currentMouseButtons.Add(btn);
     }
 
     [JSInvokable]
     public void OnMouseUp(int button)
     {
         var btn = MapJsMouseButton(button);
-        _currentMouseButtons.Remove(btn);
+        lock (_inputLock) _currentMouseButtons.Remove(btn);
     }
 
     [JSInvokable]
     public void OnMouseWheel(float delta)
     {
-        _accumulatedScrollDelta += delta;
+        lock (_inputLock) _accumulatedScrollDelta += delta;
     }
 
     private static KeyCode MapJsKey(string key) => key switch

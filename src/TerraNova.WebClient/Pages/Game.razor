@@ -10,6 +10,7 @@
 
 @code {
     private DotNetObjectReference<Game>? _dotNetRef;
+    private DotNetObjectReference<WebGLInputSystem>? _inputRef;
     private TerraNovaGame? _game;
     private WebGLRenderer? _renderer;
     private WebGLInputSystem? _inputSystem;
@@ -27,6 +28,9 @@
                 await _renderer.PrepareAsync();
 
                 _inputSystem = new WebGLInputSystem(JS);
+                _inputRef = DotNetObjectReference.Create(_inputSystem);
+                await JS.InvokeVoidAsync("terraNova.initInput", _inputRef);
+
                 _game = new TerraNovaGame(_renderer, _inputSystem);
 
                 // Synchronous game initialization (orchestrates renderer.Initialize())
@@ -74,6 +78,7 @@
         await JS.InvokeVoidAsync("terraNova.cleanup");
 
         _dotNetRef?.Dispose();
+        _inputRef?.Dispose();
     }
 
     private record CanvasSize(int Width, int Height);

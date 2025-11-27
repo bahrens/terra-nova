@@ -13,6 +13,7 @@ window.terraNova = {
   isRunning: false,
   dotNetHelper: null,
   resizeDotNetHelper: null,
+  inputDotNetHelper: null,
   lastFrameTime: 0,
 
   /**
@@ -332,6 +333,9 @@ window.terraNova = {
       this._resizeHandler = null;
     }
 
+    // Remove input listeners
+    this.removeInput();
+
     console.log('WebGL resources cleaned up');
   },
 
@@ -359,5 +363,93 @@ window.terraNova = {
       this._resizeHandler = null;
     }
     this.resizeDotNetHelper = null;
+  },
+
+  /**
+   * Initialize input event listeners
+   * @param {object} inputHelper - .NET WebGLInputSystem reference
+   */
+  initInput: function (inputHelper) {
+    this.inputDotNetHelper = inputHelper;
+
+    // Keyboard events
+    this._keyDownHandler = (e) => {
+      if (this.inputDotNetHelper) {
+        this.inputDotNetHelper.invokeMethodAsync('OnKeyDown', e.key);
+      }
+    };
+    this._keyUpHandler = (e) => {
+      if (this.inputDotNetHelper) {
+        this.inputDotNetHelper.invokeMethodAsync('OnKeyUp', e.key);
+      }
+    };
+    window.addEventListener('keydown', this._keyDownHandler);
+    window.addEventListener('keyup', this._keyUpHandler);
+
+    // Mouse events on canvas
+    this._mouseMoveHandler = (e) => {
+      if (this.inputDotNetHelper) {
+        const rect = this.canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        this.inputDotNetHelper.invokeMethodAsync('OnMouseMove', x, y);
+      }
+    };
+    this._mouseDownHandler = (e) => {
+      if (this.inputDotNetHelper) {
+        this.inputDotNetHelper.invokeMethodAsync('OnMouseDown', e.button);
+      }
+    };
+    this._mouseUpHandler = (e) => {
+      if (this.inputDotNetHelper) {
+        this.inputDotNetHelper.invokeMethodAsync('OnMouseUp', e.button);
+      }
+    };
+    this._wheelHandler = (e) => {
+      e.preventDefault();
+      if (this.inputDotNetHelper) {
+        const delta = e.deltaY * -0.01;
+        this.inputDotNetHelper.invokeMethodAsync('OnMouseWheel', delta);
+      }
+    };
+    this.canvas.addEventListener('mousemove', this._mouseMoveHandler);
+    this.canvas.addEventListener('mousedown', this._mouseDownHandler);
+    this.canvas.addEventListener('mouseup', this._mouseUpHandler);
+    this.canvas.addEventListener('wheel', this._wheelHandler, { passive: false });
+
+    console.log('Input event listeners registered');
+  },
+
+  /**
+   * Remove input event listeners
+   */
+  removeInput: function () {
+    if (this._keyDownHandler) {
+      window.removeEventListener('keydown', this._keyDownHandler);
+      this._keyDownHandler = null;
+    }
+    if (this._keyUpHandler) {
+      window.removeEventListener('keyup', this._keyUpHandler);
+      this._keyUpHandler = null;
+    }
+    if (this._mouseMoveHandler) {
+      this.canvas.removeEventListener('mousemove', this._mouseMoveHandler);
+      this._mouseMoveHandler = null;
+    }
+    if (this._mouseDownHandler) {
+      this.canvas.removeEventListener('mousedown', this._mouseDownHandler);
+      this._mouseDownHandler = null;
+    }
+    if (this._mouseUpHandler) {
+      this.canvas.removeEventListener('mouseup', this._mouseUpHandler);
+      this._mouseUpHandler = null;
+    }
+    if (this._wheelHandler) {
+      this.canvas.removeEventListener('wheel', this._wheelHandler);
+      this._wheelHandler = null;
+    }
+    this.inputDotNetHelper = null;
+
+    console.log('Input event listeners removed');
   }
 };
