@@ -40,11 +40,6 @@ public class TerraNovaGame : IGame
 
     public void Update(double deltaTime)
     {
-        if (_inputProvider.IsKeyPressed(KeyCode.Escape))
-        {
-            // TODO: Handle escape key press
-        }
-
         _renderer.Update(deltaTime);
     }
 }

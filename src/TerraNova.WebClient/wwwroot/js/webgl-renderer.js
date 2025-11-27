@@ -259,7 +259,7 @@ window.terraNova = {
    * Main render loop using requestAnimationFrame
    * @param {number} currentTime - Timestamp from requestAnimationFrame (in milliseconds)
    */
-  renderLoop: function (currentTime) {
+  renderLoop: async function (currentTime) {
     if (!this.isRunning) return;
 
     // Calculate delta time in seconds
@@ -271,7 +271,7 @@ window.terraNova = {
 
     // Let C# handle update and rendering
     if (this.dotNetHelper) {
-      this.dotNetHelper.invokeMethodAsync('OnUpdate', deltaTime);
+      await this.dotNetHelper.invokeMethodAsync('OnUpdate', deltaTime);
     }
 
     if (this.isRunning) {
