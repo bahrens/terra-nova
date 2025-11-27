@@ -57,67 +57,75 @@ public class OpenTkInputSystem : IInputSystem
         foreach (KeyCode keyCode in Enum.GetValues<KeyCode>())
         {
             if (keyCode == KeyCode.None) continue;
-              var openTkKey = MapKeyCode(keyCode);
-              if (keyboardState.IsKeyDown(openTkKey))
-                  _currentKeys.Add(keyCode);
+            var openTkKey = MapKeyCode(keyCode);
+            if (keyboardState.IsKeyDown(openTkKey))
+            {
+                _currentKeys.Add(keyCode);
+            }
         }
 
         // Sample mouse state
         _currentMouseButtons.Clear();
         var mouseState = _window.MouseState;
         if (mouseState.IsButtonDown(MouseButton.Left))
-              _currentMouseButtons.Add(MouseButtonCode.Left);
-          if (mouseState.IsButtonDown(MouseButton.Right))
-              _currentMouseButtons.Add(MouseButtonCode.Right);
-          if (mouseState.IsButtonDown(MouseButton.Middle))
-              _currentMouseButtons.Add(MouseButtonCode.Middle);
+        {
+            _currentMouseButtons.Add(MouseButtonCode.Left);
+        }
+        if (mouseState.IsButtonDown(MouseButton.Right))
+        {
+            _currentMouseButtons.Add(MouseButtonCode.Right);
+        }
+        if (mouseState.IsButtonDown(MouseButton.Middle))
+        {
+            _currentMouseButtons.Add(MouseButtonCode.Middle);
+        }
 
         _currentMousePosition = new Vector2(mouseState.X, mouseState.Y);
         _mouseScrollDelta = mouseState.ScrollDelta.Y;
     }
 
     public bool IsKeyDown(KeyCode keyCode) => _currentKeys.Contains(keyCode);
-      public bool IsKeyPressed(KeyCode keyCode) => _currentKeys.Contains(keyCode) && !_previousKeys.Contains(keyCode);
-      public bool IsKeyReleased(KeyCode keyCode) => !_currentKeys.Contains(keyCode) && _previousKeys.Contains(keyCode);
+    public bool IsKeyPressed(KeyCode keyCode) => _currentKeys.Contains(keyCode) && !_previousKeys.Contains(keyCode);
+    public bool IsKeyReleased(KeyCode keyCode) => !_currentKeys.Contains(keyCode) && _previousKeys.Contains(keyCode);
 
-      public bool IsMouseButtonDown(MouseButtonCode mouseButton) => _currentMouseButtons.Contains(mouseButton);
-      public bool IsMouseButtonPressed(MouseButtonCode mouseButton) => _currentMouseButtons.Contains(mouseButton) && !_previousMouseButtons.Contains(mouseButton);
-      public bool IsMouseButtonReleased(MouseButtonCode mouseButton) => !_currentMouseButtons.Contains(mouseButton) && _previousMouseButtons.Contains(mouseButton);
+    public bool IsMouseButtonDown(MouseButtonCode mouseButton) => _currentMouseButtons.Contains(mouseButton);
+    public bool IsMouseButtonPressed(MouseButtonCode mouseButton) => _currentMouseButtons.Contains(mouseButton) && !_previousMouseButtons.Contains(mouseButton);
+    public bool IsMouseButtonReleased(MouseButtonCode mouseButton) => !_currentMouseButtons.Contains(mouseButton) && _previousMouseButtons.Contains(mouseButton);
 
     private static Keys MapKeyCode(KeyCode keyCode) => keyCode switch
-      {
-          KeyCode.W => Keys.W,
-          KeyCode.A => Keys.A,
-          KeyCode.S => Keys.S,
-          KeyCode.D => Keys.D,
-          KeyCode.Q => Keys.Q,
-          KeyCode.E => Keys.E,
-          KeyCode.R => Keys.R,
-          KeyCode.T => Keys.T,
-          KeyCode.J => Keys.J,
-          KeyCode.Space => Keys.Space,
-          KeyCode.LeftShift => Keys.LeftShift,
-          KeyCode.LeftControl => Keys.LeftControl,
-          KeyCode.Escape => Keys.Escape,
-          KeyCode.Enter => Keys.Enter,
-          KeyCode.Tab => Keys.Tab,
-          KeyCode.Backspace => Keys.Backspace,
-          KeyCode.F1 => Keys.F1,
-          KeyCode.F2 => Keys.F2,
-          KeyCode.F3 => Keys.F3,
-          KeyCode.F4 => Keys.F4,
-          KeyCode.F5 => Keys.F5,
-          KeyCode.F11 => Keys.F11,
-          KeyCode.D0 => Keys.D0,
-          KeyCode.D1 => Keys.D1,
-          KeyCode.D2 => Keys.D2,
-          KeyCode.D3 => Keys.D3,
-          KeyCode.D4 => Keys.D4,
-          KeyCode.D5 => Keys.D5,
-          KeyCode.D6 => Keys.D6,
-          KeyCode.D7 => Keys.D7,
-          KeyCode.D8 => Keys.D8,
-          KeyCode.D9 => Keys.D9,
-          _ => Keys.Unknown
-      };
+    {
+        KeyCode.W => Keys.W,
+        KeyCode.A => Keys.A,
+        KeyCode.S => Keys.S,
+        KeyCode.D => Keys.D,
+        KeyCode.Q => Keys.Q,
+        KeyCode.E => Keys.E,
+        KeyCode.R => Keys.R,
+        KeyCode.T => Keys.T,
+        KeyCode.J => Keys.J,
+        KeyCode.Space => Keys.Space,
+        KeyCode.LeftShift => Keys.LeftShift,
+        KeyCode.LeftControl => Keys.LeftControl,
+        KeyCode.Escape => Keys.Escape,
+        KeyCode.Enter => Keys.Enter,
+        KeyCode.Tab => Keys.Tab,
+        KeyCode.Backspace => Keys.Backspace,
+        KeyCode.F1 => Keys.F1,
+        KeyCode.F2 => Keys.F2,
+        KeyCode.F3 => Keys.F3,
+        KeyCode.F4 => Keys.F4,
+        KeyCode.F5 => Keys.F5,
+        KeyCode.F11 => Keys.F11,
+        KeyCode.D0 => Keys.D0,
+        KeyCode.D1 => Keys.D1,
+        KeyCode.D2 => Keys.D2,
+        KeyCode.D3 => Keys.D3,
+        KeyCode.D4 => Keys.D4,
+        KeyCode.D5 => Keys.D5,
+        KeyCode.D6 => Keys.D6,
+        KeyCode.D7 => Keys.D7,
+        KeyCode.D8 => Keys.D8,
+        KeyCode.D9 => Keys.D9,
+        _ => Keys.Unknown
+    };
 }
