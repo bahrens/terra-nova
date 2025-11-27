@@ -300,11 +300,14 @@ window.terraNova = {
   },
 
   /**
-   * Clean up all WebGL resources
+   * Clean up all WebGL resources and references
    */
   cleanup: function () {
     const gl = this.gl;
     if (!gl) return;
+
+    // Stop render loop
+    this.isRunning = false;
 
     // Delete all chunk buffers
     Object.values(this.buffers).forEach(buffer => {
@@ -317,6 +320,16 @@ window.terraNova = {
     if (this.program) {
       gl.deleteProgram(this.program);
       this.program = null;
+    }
+
+    // Clear .NET references to prevent memory leaks
+    this.dotNetHelper = null;
+    this.resizeDotNetHelper = null;
+
+    // Remove resize listener if still attached
+    if (this._resizeHandler) {
+      window.removeEventListener('resize', this._resizeHandler);
+      this._resizeHandler = null;
     }
 
     console.log('WebGL resources cleaned up');

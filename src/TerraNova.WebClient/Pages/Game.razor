@@ -47,9 +47,16 @@
     [JSInvokable]
     public void OnUpdate(float deltaTime)
     {
-        _inputSystem?.BeginFrame();
-        _game?.Update(deltaTime);
-        _game?.Render();
+        try
+        {
+            _inputSystem?.BeginFrame();
+            _game?.Update(deltaTime);
+            _game?.Render();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error in game update loop: {ex.Message}");
+        }
     }
 
     [JSInvokable]
@@ -60,14 +67,11 @@
 
     public async ValueTask DisposeAsync()
     {
-        await JS.InvokeVoidAsync("terraNova.stopRenderLoop");
-
         // Synchronous game disposal
         _game?.Dispose();
 
-        // Platform-specific async JS cleanup
+        // Comprehensive JS cleanup (stops render loop, clears references, removes listeners)
         await JS.InvokeVoidAsync("terraNova.cleanup");
-        await JS.InvokeVoidAsync("terraNova.removeResizeListener");
 
         _dotNetRef?.Dispose();
     }
