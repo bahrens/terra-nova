@@ -19,6 +19,7 @@ public class WebGLInputSystem : IInputSystem
     private Vector2 _currentMousePosition;
     private Vector2 _previousMousePosition;
     private float _mouseScrollDelta;
+    private float _accumulatedScrollDelta;
 
     public WebGLInputSystem(IJSRuntime jsRuntime)
     {
@@ -41,9 +42,10 @@ public class WebGLInputSystem : IInputSystem
             _previousMouseButtons.Add(button);
 
         _previousMousePosition = _currentMousePosition;
-        _mouseScrollDelta = 0f;
 
-        // TODO: Poll input state from JS if needed
+        // Transfer accumulated scroll to this frame's delta, then reset accumulator
+        _mouseScrollDelta = _accumulatedScrollDelta;
+        _accumulatedScrollDelta = 0f;
     }
 
     public bool IsKeyDown(KeyCode keyCode) => _currentKeys.Contains(keyCode);
@@ -94,7 +96,7 @@ public class WebGLInputSystem : IInputSystem
     [JSInvokable]
     public void OnMouseWheel(float delta)
     {
-        _mouseScrollDelta = delta;
+        _accumulatedScrollDelta += delta;
     }
 
     private static KeyCode MapJsKey(string key) => key switch

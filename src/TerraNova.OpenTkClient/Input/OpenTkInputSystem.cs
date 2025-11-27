@@ -7,6 +7,10 @@ namespace TerraNova.OpenTkClient.Input;
 
 public class OpenTkInputSystem : IInputSystem
 {
+    private static readonly KeyCode[] AllKeyCodes = Enum.GetValues<KeyCode>()
+        .Where(k => k != KeyCode.None)
+        .ToArray();
+
     private readonly GameWindow _window;
 
     // Keyboard state tracking
@@ -54,9 +58,8 @@ public class OpenTkInputSystem : IInputSystem
         // Sample current state from OpenTK
         _currentKeys.Clear();
         var keyboardState = _window.KeyboardState;
-        foreach (KeyCode keyCode in Enum.GetValues<KeyCode>())
+        foreach (var keyCode in AllKeyCodes)
         {
-            if (keyCode == KeyCode.None) continue;
             var openTkKey = MapKeyCode(keyCode);
             if (keyboardState.IsKeyDown(openTkKey))
             {
