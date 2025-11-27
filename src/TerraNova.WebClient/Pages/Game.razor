@@ -1,21 +1,44 @@
 @page "/"
 @inject IJSRuntime JS
 @implements IAsyncDisposable
+@using TerraNova.Client
+@using TerraNova.Client.Math
+@using TerraNova.WebClient.Rendering
+@using TerraNova.WebClient.Input
 
 <canvas id="gameCanvas" width="800" height="600"></canvas>
 
 @code {
     private DotNetObjectReference<Game>? _dotNetRef;
+    private DotNetObjectReference<WebGLInputSystem>? _inputRef;
+    private TerraNovaGame? _game;
+    private WebGLRenderer? _renderer;
+    private WebGLInputSystem? _inputSystem;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            _dotNetRef = DotNetObjectReference.Create(this);
             var success = await JS.InvokeAsync<bool>("terraNova.init", "gameCanvas");
 
             if (success)
             {
+                // Create renderer and do platform-specific async preparation
+                _renderer = new WebGLRenderer(JS);
+                await _renderer.PrepareAsync();
+
+                _inputSystem = new WebGLInputSystem(JS);
+                _inputRef = DotNetObjectReference.Create(_inputSystem);
+                await JS.InvokeVoidAsync("terraNova.initInput", _inputRef);
+
+                _game = new TerraNovaGame(_renderer, _inputSystem);
+
+                // Synchronous game initialization (orchestrates renderer.Initialize())
+                var size = await JS.InvokeAsync<CanvasSize>("terraNova.getCanvasSize");
+                _game.Load(new ViewportInfo(size.Width, size.Height));
+
+                _dotNetRef = DotNetObjectReference.Create(this);
+                await JS.InvokeVoidAsync("terraNova.addResizeListener", _dotNetRef);
                 await JS.InvokeVoidAsync("terraNova.startRenderLoop", _dotNetRef);
             }
             else
@@ -28,11 +51,35 @@
     [JSInvokable]
     public void OnUpdate(float deltaTime)
     {
-      // TODO: Implementation will come later
+        try
+        {
+            _inputSystem?.BeginFrame();
+            _game?.Update(deltaTime);
+            _game?.Render();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error in game update loop: {ex.Message}");
+        }
+    }
+
+    [JSInvokable]
+    public void OnResize(int width, int height)
+    {
+        _game?.Resize(new ViewportInfo(width, height));
     }
 
     public async ValueTask DisposeAsync()
     {
-        await JS.InvokeVoidAsync("terraNova.stopRenderLoop");
+        // Synchronous game disposal
+        _game?.Dispose();
+
+        // Comprehensive JS cleanup (stops render loop, clears references, removes listeners)
+        await JS.InvokeVoidAsync("terraNova.cleanup");
+
+        _dotNetRef?.Dispose();
+        _inputRef?.Dispose();
     }
-  }
+
+    private record CanvasSize(int Width, int Height);
+}

@@ -1,6 +1,6 @@
 namespace TerraNova.Client.Input;
 
-public enum MouseButton
+public enum MouseButtonCode
 {
     Left,
     Right,

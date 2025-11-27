@@ -12,6 +12,8 @@ window.terraNova = {
 
   isRunning: false,
   dotNetHelper: null,
+  resizeDotNetHelper: null,
+  inputDotNetHelper: null,
   lastFrameTime: 0,
 
   /**
@@ -258,18 +260,20 @@ window.terraNova = {
    * Main render loop using requestAnimationFrame
    * @param {number} currentTime - Timestamp from requestAnimationFrame (in milliseconds)
    */
-  renderLoop: function (currentTime) {
+  renderLoop: async function (currentTime) {
     if (!this.isRunning) return;
 
     // Calculate delta time in seconds
     const deltaTime = (currentTime - this.lastFrameTime) / 1000.0;
     this.lastFrameTime = currentTime;
 
-    if (this.dotNetHelper) {
-      this.dotNetHelper.invokeMethodAsync('OnUpdate', deltaTime);
-    }
-
+    // Clear screen
     this.clear(0.2, 0.4, 0.8, 1.0);
+
+    // Let C# handle update and rendering
+    if (this.dotNetHelper) {
+      await this.dotNetHelper.invokeMethodAsync('OnUpdate', deltaTime);
+    }
 
     if (this.isRunning) {
       requestAnimationFrame((time) => this.renderLoop(time));
@@ -294,5 +298,158 @@ window.terraNova = {
 
       console.log(`Canvas resized to ${displayWidth}x${displayHeight}`);
     }
+  },
+
+  /**
+   * Clean up all WebGL resources and references
+   */
+  cleanup: function () {
+    const gl = this.gl;
+    if (!gl) return;
+
+    // Stop render loop
+    this.isRunning = false;
+
+    // Delete all chunk buffers
+    Object.values(this.buffers).forEach(buffer => {
+      gl.deleteBuffer(buffer.vertex);
+      gl.deleteBuffer(buffer.index);
+    });
+    this.buffers = {};
+
+    // Delete shader program
+    if (this.program) {
+      gl.deleteProgram(this.program);
+      this.program = null;
+    }
+
+    // Clear .NET references to prevent memory leaks
+    this.dotNetHelper = null;
+    this.resizeDotNetHelper = null;
+
+    // Remove resize listener if still attached
+    if (this._resizeHandler) {
+      window.removeEventListener('resize', this._resizeHandler);
+      this._resizeHandler = null;
+    }
+
+    // Remove input listeners
+    this.removeInput();
+
+    console.log('WebGL resources cleaned up');
+  },
+
+  /**
+   * Set up resize listener that notifies .NET
+   * @param {object} dotNetHelper - .NET object reference for callbacks
+   */
+  addResizeListener: function (dotNetHelper) {
+    this.resizeDotNetHelper = dotNetHelper;
+    this._resizeHandler = () => {
+      this.resizeCanvas();
+      if (this.resizeDotNetHelper) {
+        this.resizeDotNetHelper.invokeMethodAsync('OnResize', this.canvas.width, this.canvas.height);
+      }
+    };
+    window.addEventListener('resize', this._resizeHandler);
+  },
+
+  /**
+   * Remove resize listener
+   */
+  removeResizeListener: function () {
+    if (this._resizeHandler) {
+      window.removeEventListener('resize', this._resizeHandler);
+      this._resizeHandler = null;
+    }
+    this.resizeDotNetHelper = null;
+  },
+
+  /**
+   * Initialize input event listeners
+   * @param {object} inputHelper - .NET WebGLInputSystem reference
+   */
+  initInput: function (inputHelper) {
+    this.inputDotNetHelper = inputHelper;
+
+    // Keyboard events
+    this._keyDownHandler = (e) => {
+      if (this.inputDotNetHelper) {
+        this.inputDotNetHelper.invokeMethodAsync('OnKeyDown', e.key);
+      }
+    };
+    this._keyUpHandler = (e) => {
+      if (this.inputDotNetHelper) {
+        this.inputDotNetHelper.invokeMethodAsync('OnKeyUp', e.key);
+      }
+    };
+    window.addEventListener('keydown', this._keyDownHandler);
+    window.addEventListener('keyup', this._keyUpHandler);
+
+    // Mouse events on canvas
+    this._mouseMoveHandler = (e) => {
+      if (this.inputDotNetHelper) {
+        const rect = this.canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        this.inputDotNetHelper.invokeMethodAsync('OnMouseMove', x, y);
+      }
+    };
+    this._mouseDownHandler = (e) => {
+      if (this.inputDotNetHelper) {
+        this.inputDotNetHelper.invokeMethodAsync('OnMouseDown', e.button);
+      }
+    };
+    this._mouseUpHandler = (e) => {
+      if (this.inputDotNetHelper) {
+        this.inputDotNetHelper.invokeMethodAsync('OnMouseUp', e.button);
+      }
+    };
+    this._wheelHandler = (e) => {
+      e.preventDefault();
+      if (this.inputDotNetHelper) {
+        const delta = e.deltaY * -0.01;
+        this.inputDotNetHelper.invokeMethodAsync('OnMouseWheel', delta);
+      }
+    };
+    this.canvas.addEventListener('mousemove', this._mouseMoveHandler);
+    this.canvas.addEventListener('mousedown', this._mouseDownHandler);
+    this.canvas.addEventListener('mouseup', this._mouseUpHandler);
+    this.canvas.addEventListener('wheel', this._wheelHandler, { passive: false });
+
+    console.log('Input event listeners registered');
+  },
+
+  /**
+   * Remove input event listeners
+   */
+  removeInput: function () {
+    if (this._keyDownHandler) {
+      window.removeEventListener('keydown', this._keyDownHandler);
+      this._keyDownHandler = null;
+    }
+    if (this._keyUpHandler) {
+      window.removeEventListener('keyup', this._keyUpHandler);
+      this._keyUpHandler = null;
+    }
+    if (this._mouseMoveHandler) {
+      this.canvas.removeEventListener('mousemove', this._mouseMoveHandler);
+      this._mouseMoveHandler = null;
+    }
+    if (this._mouseDownHandler) {
+      this.canvas.removeEventListener('mousedown', this._mouseDownHandler);
+      this._mouseDownHandler = null;
+    }
+    if (this._mouseUpHandler) {
+      this.canvas.removeEventListener('mouseup', this._mouseUpHandler);
+      this._mouseUpHandler = null;
+    }
+    if (this._wheelHandler) {
+      this.canvas.removeEventListener('wheel', this._wheelHandler);
+      this._wheelHandler = null;
+    }
+    this.inputDotNetHelper = null;
+
+    console.log('Input event listeners removed');
   }
 };
