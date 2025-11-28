@@ -1,4 +1,4 @@
-#version 330 core
+#version 430 core
 
 // === INPUTS (from your vertex buffer) ===
 // These match ChunkMeshData's interleaved format

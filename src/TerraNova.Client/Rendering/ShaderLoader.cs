@@ -17,7 +17,7 @@ public static class ShaderLoader
         {
             ShaderPlatform.OpenGL => $"TerraNova.Client.Shaders.OpenGL.{shaderName}",
             ShaderPlatform.WebGL => $"TerraNova.Client.Shaders.WebGL.{shaderName}",
-            _ => throw new ArgumentOutOfRangeException(nameof(platform), platform, null)
+            _ => throw new ArgumentOutOfRangeException(nameof(platform), platform, "Unsupported shader platform"),
         };
 
         using var stream = assembly.GetManifestResourceStream(resourcePath);
