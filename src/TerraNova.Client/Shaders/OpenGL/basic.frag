@@ -1,4 +1,4 @@
-#version 330 core
+#version 430 core
 
 // === INPUTS (from vertex shader, interpolated) ===
 in vec3 vNormal;
