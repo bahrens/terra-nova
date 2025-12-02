@@ -40,11 +40,13 @@ public class OpenTkShaderProgram : IDisposable
 
     public void Use()
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         GL.UseProgram(_handle);
     }
 
     public void SetMatrix4(string name, System.Numerics.Matrix4x4 matrix)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (_uniformLocations.TryGetValue(name, out var location))
         {
             float[] values =
@@ -64,6 +66,7 @@ public class OpenTkShaderProgram : IDisposable
 
     public void Dispose()
     {
+        GC.SuppressFinalize(this);
         if (!_disposed)
         {
             GL.DeleteProgram(_handle);
