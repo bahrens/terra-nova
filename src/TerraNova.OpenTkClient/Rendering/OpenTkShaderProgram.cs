@@ -27,7 +27,7 @@ public class OpenTkShaderProgram : IDisposable
         {
             var infoLog = GL.GetProgramInfoLog(_handle);
             GL.DeleteProgram(_handle);
-            throw new InvalidOperationException($"Error linking shader program: {infoLog}");
+            throw new InvalidOperationException($"Error linking shader {shaderName}: {infoLog}");
         }
 
         GL.DetachShader(_handle, vertexShader);
