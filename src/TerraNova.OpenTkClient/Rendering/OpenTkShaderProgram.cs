@@ -66,12 +66,12 @@ public class OpenTkShaderProgram : IDisposable
 
     public void Dispose()
     {
-        GC.SuppressFinalize(this);
         if (!_disposed)
         {
             GL.DeleteProgram(_handle);
             _disposed = true;
         }
+        GC.SuppressFinalize(this);
     }
 
     private static int CompileShader(ShaderType type, string source)
