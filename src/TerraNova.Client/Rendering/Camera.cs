@@ -13,15 +13,15 @@ public class Camera : ICameraView
     private Vector3 _up = Vector3.UnitY; // World up
     private Vector3 _right = Vector3.UnitX; // Initially facing positive X
 
-    public Vector3 Position {get; set;} = new Vector3(0, 0, 3);
+    public Vector3 Position { get; set; } = new Vector3(0, 0, 3);
     public Vector3 Front => _front;
     public Vector3 Up => _up;
     public Vector3 Right => _right;
-    public float Fov {get; set;} = 60f;
+    public float Fov { get; set; } = 60f;
 
     // Near/far clip planes for the projection
-    public float NearPlane {get; set;} = 0.1f;
-    public float FarPlane {get; set;} = 1000f;
+    public float NearPlane { get; set; } = 0.1f;
+    public float FarPlane { get; set; } = 1000f;
 
     public float Yaw
     {
