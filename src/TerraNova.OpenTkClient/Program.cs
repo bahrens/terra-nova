@@ -16,7 +16,7 @@ public class Program
             ClientSize = new Vector2i(800, 600),
             Title = "Terra Nova",
             Flags = ContextFlags.ForwardCompatible,
-            APIVersion = new Version(3, 3),
+            APIVersion = new Version(4, 3),
             Profile = ContextProfile.Core,
             StartVisible = true,
             StartFocused = true,
