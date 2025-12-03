@@ -16,10 +16,10 @@ public static class TestMeshGenerator
         float[] vertices =
         [
             // Position (3)         Normal (3)              TexCoord (2)
-            -0.5f, -0.5f, 0.0f,    normal.X, normal.Y, normal.Z,    0.0f, 0.0f,  // bottom-left
-               0.5f, -0.5f, 0.0f,    normal.X, normal.Y, normal.Z,    1.0f, 0.0f,  // bottom-right
-               0.0f,  0.5f, 0.0f,    normal.X, normal.Y, normal.Z,    0.5f, 1.0f,  // top-center
-          ];
+            -0.5f, -0.5f, 0.0f,   normal.X, normal.Y, normal.Z,    0.0f, 0.0f,  // bottom-left
+            0.5f, -0.5f, 0.0f,    normal.X, normal.Y, normal.Z,    1.0f, 0.0f,  // bottom-right
+            0.0f,  0.5f, 0.0f,    normal.X, normal.Y, normal.Z,    0.5f, 1.0f,  // top-center
+        ];
 
         ushort[] indices = [0, 2, 1];
 
@@ -53,18 +53,18 @@ public static class TestMeshGenerator
             new Vector3(0, 1, 0)); // +Y face
 
         AddFace(vertices, indices,
-            new Vector3(-0.5f, -0.5f, 0.5f), new Vector3(-0.5f, -0.5f, -0.5f),
-            new Vector3(0.5f, -0.5f, -0.5f), new Vector3(0.5f, -0.5f, 0.5f),
+            new Vector3(-0.5f, -0.5f, -0.5f), new Vector3(-0.5f, -0.5f, 0.5f),
+            new Vector3(0.5f, -0.5f, 0.5f), new Vector3(0.5f, -0.5f, -0.5f),
             new Vector3(0, -1, 0)); // -Y face
 
         AddFace(vertices, indices,
-            new Vector3(-0.5f, -0.5f, 0.5f), new Vector3(0.5f, -0.5f, 0.5f),
-            new Vector3(0.5f, 0.5f, 0.5f), new Vector3(-0.5f, 0.5f, 0.5f),
+            new Vector3(0.5f, -0.5f, 0.5f), new Vector3(-0.5f, -0.5f, 0.5f),
+            new Vector3(-0.5f, 0.5f, 0.5f), new Vector3(0.5f, 0.5f, 0.5f),
             new Vector3(0, 0, 1)); // +Z face
 
         AddFace(vertices, indices,
-            new Vector3(0.5f, -0.5f, -0.5f), new Vector3(-0.5f, -0.5f, -0.5f),
-            new Vector3(-0.5f, 0.5f, -0.5f), new Vector3(0.5f, 0.5f, -0.5f),
+            new Vector3(-0.5f, -0.5f, -0.5f), new Vector3(0.5f, -0.5f, -0.5f),
+            new Vector3(0.5f, 0.5f, -0.5f), new Vector3(-0.5f, 0.5f, -0.5f),
             new Vector3(0, 0, -1)); // -Z face
 
         return new ChunkMeshData(vertices.ToArray(), indices.ToArray());
